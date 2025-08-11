@@ -3,17 +3,13 @@ package com.ntn.auction.service;
 import com.ntn.auction.dto.request.ItemUpdateRequest;
 import com.ntn.auction.entity.Bid;
 import com.ntn.auction.entity.Item;
-import com.ntn.auction.mapper.BidMapper;
 import com.ntn.auction.mapper.ItemMapper;
-import com.ntn.auction.mapper.NotificationMapper;
 import com.ntn.auction.repository.BidRepository;
 import com.ntn.auction.repository.ItemRepository;
-import com.ntn.auction.repository.NotificationRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,9 +25,14 @@ import java.util.Optional;
 @Slf4j
 public class AuctionLifeCycleService {
 
+    // Repositories
     ItemRepository itemRepository;
     BidRepository bidRepository;
+
+    // Mappers
     ItemMapper itemMapper;
+
+    // // Focused Service following SRP
     NotificationService notificationService;
     BidService bidService;
 

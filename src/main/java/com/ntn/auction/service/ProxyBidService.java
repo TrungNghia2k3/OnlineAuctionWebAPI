@@ -6,9 +6,9 @@ import com.ntn.auction.entity.ProxyBid;
 import com.ntn.auction.entity.User;
 import com.ntn.auction.exception.ItemNotFoundException;
 import com.ntn.auction.exception.UserNotFoundException;
-import com.ntn.auction.repository.ProxyBidRepository;
 import com.ntn.auction.repository.BidRepository;
 import com.ntn.auction.repository.ItemRepository;
+import com.ntn.auction.repository.ProxyBidRepository;
 import com.ntn.auction.repository.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -34,14 +34,13 @@ public class ProxyBidService {
 
     @Transactional
     public void processProxyBidsAfterManualBid(Item item, BigDecimal newBidAmount, User excludeUser) {
-        // First, handle proxy bids that have been exceeded by the manual bid
-        // Get ALL active proxy bids for this item (not just eligible ones)
+        // Get ALL active proxy bids for this item
         List<ProxyBid> allActiveProxyBids = proxyBidRepository.findActiveProxyBidsForItem(item.getId());
 
         // Remove proxy bids from the manual bidder to avoid self-bidding
         allActiveProxyBids.removeIf(pb -> pb.getUser().getId().equals(excludeUser.getId()));
 
-        // Separate proxy bids into two groups: eligible and exceeded
+        // Process ALL proxy bids - separate into eligible and exceeded
         List<ProxyBid> eligibleProxyBids = allActiveProxyBids.stream()
                 .filter(pb -> pb.getMaxAmount().compareTo(newBidAmount) > 0)
                 .toList();
@@ -50,22 +49,22 @@ public class ProxyBidService {
                 .filter(pb -> pb.getMaxAmount().compareTo(newBidAmount) <= 0)
                 .toList();
 
-        // Update exceeded proxy bids to OUTBID status
+        // FIXED: Always update exceeded proxy bids to OUTBID status
         for (ProxyBid exceededBid : exceededProxyBids) {
             exceededBid.setStatus(ProxyBid.ProxyBidStatus.OUTBID);
             exceededBid.setWinning(false);
             proxyBidRepository.save(exceededBid);
-            log.info("Proxy bid {} exceeded by manual bid - status updated to OUTBID", exceededBid.getId());
+            log.info("Proxy bid {} exceeded by manual bid amount {} - status updated to OUTBID",
+                    exceededBid.getId(), newBidAmount);
         }
 
-        // If no eligible proxy bids remain, exit early
+        // Continue with eligible proxy bids only if any exist
         if (eligibleProxyBids.isEmpty()) {
-            log.info("No eligible proxy bids remaining for item {}", item.getId());
+            log.info("No eligible proxy bids remaining for item {} after manual bid {}", item.getId(), newBidAmount);
             return;
         }
 
         // Find the highest proxy bid that can still bid
-        // Sort by maxAmount descending to get the highest first
         ProxyBid highestProxyBid = eligibleProxyBids.stream()
                 .max((pb1, pb2) -> pb1.getMaxAmount().compareTo(pb2.getMaxAmount()))
                 .orElse(null);
@@ -84,7 +83,7 @@ public class ProxyBidService {
             highestProxyBid.setStatus(ProxyBid.ProxyBidStatus.EXHAUSTED);
             highestProxyBid.setWinning(false);
             proxyBidRepository.save(highestProxyBid);
-            log.info("Highest proxy bid {} exhausted by manual bid", highestProxyBid.getId());
+            log.info("Highest proxy bid {} exhausted by manual bid amount {}", highestProxyBid.getId(), newBidAmount);
         }
     }
 

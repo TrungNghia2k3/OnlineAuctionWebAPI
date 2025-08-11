@@ -21,5 +21,5 @@ public class BidUpdateEvent {
     private String buyerName;
     private String buyerId;
     private Bid.BidStatus status;
-    private Integer totalBids;
+    private Long totalBids;
 }

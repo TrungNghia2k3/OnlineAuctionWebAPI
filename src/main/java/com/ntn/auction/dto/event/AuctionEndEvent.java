@@ -19,5 +19,5 @@ public class AuctionEndEvent {
     private String winnerName;
     private String winnerId;
     private LocalDateTime endTime;
-    private Integer totalBids;
+    private Long totalBids;
 }

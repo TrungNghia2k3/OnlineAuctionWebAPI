@@ -1,6 +1,5 @@
 package com.ntn.auction.service;
 
-import com.ntn.auction.dto.event.BidUpdateEvent;
 import com.ntn.auction.dto.request.BidUpdateRequest;
 import com.ntn.auction.dto.request.CreateBidRequest;
 import com.ntn.auction.dto.response.BidResponse;
@@ -19,8 +18,6 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +25,6 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -36,122 +32,113 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class BidService {
 
+    // Repositories
     BidRepository bidRepository;
     ItemRepository itemRepository;
     UserRepository userRepository;
+
+    // Mappers
     BidMapper bidMapper;
 
-    // Enhanced with new services
+    // Focused services following SRP
     BidAuditService bidAuditService;
     BidRateLimitService bidRateLimitService;
     ProxyBidService proxyBidService;
-
-    // Existing WebSocket and Redis components
-    SimpMessagingTemplate messagingTemplate;
-    RedisTemplate<String, Object> redisTemplate;
-
-    private static final String BID_LOCK_PREFIX = "bid_lock:";
-    private static final String CURRENT_BID_PREFIX = "current_bid:";
+    RedisService redisService;
+    WebSocketService webSocketService;
+    IpAddressService ipAddressService;
 
     /**
-     * Enhanced placeBid method that integrates all services while preserving WebSocket and Redis functionality
+     * Core bid placement method - orchestrates the entire bidding process
      */
     @Transactional
     public BidResponse placeBid(CreateBidRequest createBidRequest) {
-        String lockKey = BID_LOCK_PREFIX + createBidRequest.getItemId();
-        String lockValue = UUID.randomUUID().toString();
-        String ipAddress = getClientIpAddress(); // You'll need to implement this
+        String lockKey = redisService.generateLockKey(createBidRequest.getItemId());
+        String lockValue = redisService.generateLockValue();
+        String ipAddress = ipAddressService.getClientIpAddress();
 
-        log.info("Enhanced bid processing - User: {}, Item: {}, Amount: {}",
-                createBidRequest.getBuyerId(), createBidRequest.getItemId(), createBidRequest.getAmount());
+        log.info("Processing bid - User: {}, Item: {}, Amount: {}", createBidRequest.getBuyerId(), createBidRequest.getItemId(), createBidRequest.getAmount());
 
         try {
-            // 1. ENHANCED: Rate limiting check using new service
+            // 1. Rate limiting check
             if (bidRateLimitService.isRateLimited(createBidRequest.getBuyerId(), createBidRequest.getItemId())) {
                 throw new BidException("Rate limit exceeded. Please wait before placing another bid.");
             }
 
-            // 2. Distributed locking (Redis) - PRESERVED
-            Boolean lockAcquired = redisTemplate.opsForValue()
-                    .setIfAbsent(lockKey, lockValue, Duration.ofSeconds(10));
-
-            if (!Boolean.TRUE.equals(lockAcquired)) {
+            // 2. Acquire distributed lock
+            if (!redisService.acquireLock(lockKey, lockValue, Duration.ofSeconds(10))) {
                 throw new BidException("Another bid is being processed. Please try again.");
             }
 
-            // 3. Fetch entities with proper error handling
+            // 3. Fetch and validate entities
             User currentUser = userRepository.findById(createBidRequest.getBuyerId())
                     .orElseThrow(() -> new UserNotFoundException("User not found"));
 
             Item item = itemRepository.findById(createBidRequest.getItemId())
                     .orElseThrow(() -> new ItemNotFoundException("Item not found"));
 
-            // 4. ENHANCED: Shill bidding detection using new service
-            String sellerIp = getSellerIpAddress();
+            // 4. Cache user IP for future fraud detection
+            ipAddressService.cacheUserIp(createBidRequest.getBuyerId(), ipAddress);
+
+            // 5. Shill bidding detection with real IPs
+            String sellerIp = ipAddressService.getSellerIpAddress(item.getSeller().getId());
             if (bidRateLimitService.detectShillBidding(createBidRequest.getBuyerId(), createBidRequest.getItemId(), sellerIp, ipAddress)) {
                 throw new BidException("Suspicious bidding pattern detected");
             }
 
-            // 5. Business validation (enhanced)
+            // 6. Enhanced IP-based fraud detection
+            if (ipAddressService.isSameIpAddress(createBidRequest.getBuyerId(), item.getSeller().getId())) {
+                throw new BidException("Bidding from same IP as seller is not allowed");
+            }
+
+            // 7. Business validation
             validateBidRules(item, currentUser, createBidRequest.getAmount());
 
-            // 6. Get current highest bid from cache (Redis) - PRESERVED
-            BigDecimal cachedCurrentBid = getCurrentBidFromCache(createBidRequest.getItemId());
+            // 8. Cache validation
+            BigDecimal cachedCurrentBid = redisService.getCurrentBid(createBidRequest.getItemId());
             if (cachedCurrentBid != null && createBidRequest.getAmount().compareTo(cachedCurrentBid) <= 0) {
                 throw new BidException("Bid amount must be higher than current bid: " + cachedCurrentBid);
             }
 
-            // 7. Update previous bids
-            bidRepository.resetHighestBidFlags(createBidRequest.getItemId());
-            bidRepository.markPreviousBidsAsOutbid(createBidRequest.getItemId());
+            // 9. Create and save bid
+            Bid savedBid = createAndSaveBid(item, currentUser, createBidRequest.getAmount());
 
-            // 8. Create and save new bid
-            Bid newBid = Bid.builder()
-                    .item(item)
-                    .buyer(currentUser)
-                    .amount(createBidRequest.getAmount())
-                    .bidTime(LocalDateTime.now())
-                    .status(Bid.BidStatus.ACCEPTED)
-                    .highestBid(true)
-                    .proxyBid(false)
-                    .build();
+            // 10. Update item and cache
+            updateItemAndCache(item, createBidRequest.getAmount());
 
-            Bid savedBid = bidRepository.save(newBid);
-
-            // 9. Update item current price
-            item.setCurrentBidPrice(createBidRequest.getAmount());
-            itemRepository.save(item);
-
-            // 10. Update Redis cache - PRESERVED
-            updateCurrentBidCache(createBidRequest.getItemId(), createBidRequest.getAmount());
-
-            // 11. ENHANCED: Create audit log using new service
+            // 11. Audit logging with real IP
             bidAuditService.logBidAction(savedBid, BidAuditLog.ActionType.BID_PLACED, ipAddress);
 
-            // 12. ENHANCED: Process proxy bids using new service
+            // 12. Log IP activity for audit
+            ipAddressService.logIpActivity(createBidRequest.getBuyerId(), ipAddress, "BID_PLACED");
+
+            // 13. Process proxy bids
             proxyBidService.processProxyBidsAfterManualBid(item, createBidRequest.getAmount(), currentUser);
 
-            // 13. Create response
-            BidResponse bidResponse = bidMapper.toResponse(savedBid);
+            // 14. Real-time notifications
+            Long totalBids = bidRepository.countByItemId(item.getId());
+            webSocketService.sendBidUpdate(savedBid, item, totalBids);
 
-            // 14. WebSocket broadcast - PRESERVED
-            broadcastBidUpdate(savedBid, item);
-
-            log.info("Enhanced bid placed successfully - ID: {}, Amount: {}", savedBid.getId(), savedBid.getAmount());
-            return bidResponse;
+            log.info("Bid placed successfully - ID: {}, Amount: {}", savedBid.getId(), savedBid.getAmount());
+            return bidMapper.toResponse(savedBid);
 
         } finally {
-            // 15. Release distributed lock - PRESERVED
-            releaseLock(lockKey, lockValue);
-            log.debug("Released lock for key {}", lockKey);
+            redisService.releaseLock(lockKey, lockValue);
         }
     }
 
+    /**
+     * Get all bids for an item
+     */
     public List<BidResponse> getItemBids(Long itemId) {
         List<Bid> bids = bidRepository.findByItemIdOrderByAmountDesc(itemId);
         return bidMapper.toResponseList(bids);
     }
 
+    /**
+     * Update bid statuses at auction end
+     */
+    @Transactional
     public void updateBidsStatus(Item item, Bid winningBid) {
         List<Bid> allBids = bidRepository.findByItem(item);
 
@@ -176,23 +163,37 @@ public class BidService {
         bidRepository.saveAll(allBids);
     }
 
-    // Helper methods
-    private String getClientIpAddress() {
-        // Implementation to get client IP from request context
-        return "127.0.0.1"; // Placeholder
-    }
-
-    private String getSellerIpAddress() {
-        // Implementation to get seller's IP from session/cache
-        return "192.168.1.1"; // Placeholder
-    }
-
     /**
-     * Enhanced business validation with better error messages
+     * Private helper methods
      */
+    private Bid createAndSaveBid(Item item, User buyer, BigDecimal amount) {
+        // Reset previous highest bid flags
+        bidRepository.resetHighestBidFlags(item.getId());
+        bidRepository.markPreviousBidsAsOutbid(item.getId());
+
+        Bid newBid = Bid.builder()
+                .item(item)
+                .buyer(buyer)
+                .amount(amount)
+                .bidTime(LocalDateTime.now())
+                .status(Bid.BidStatus.ACCEPTED)
+                .highestBid(true)
+                .proxyBid(false)
+                .build();
+
+        return bidRepository.save(newBid);
+    }
+
+    private void updateItemAndCache(Item item, BigDecimal amount) {
+        item.setCurrentBidPrice(amount);
+        itemRepository.save(item);
+        redisService.updateCurrentBid(item.getId(), amount);
+    }
+
     private void validateBidRules(Item item, User user, BigDecimal bidAmount) {
-        // Check if auction is active
         LocalDateTime now = LocalDateTime.now();
+
+        // Time validation
         if (now.isBefore(item.getAuctionStartDate())) {
             throw new BidException("Auction has not started yet");
         }
@@ -200,95 +201,28 @@ public class BidService {
             throw new BidException("Auction has ended");
         }
 
-        // Check item status
+        // Status validation
         if (item.getStatus() != Item.ItemStatus.ACTIVE) {
             throw new BidException("Item is not available for bidding");
         }
 
-        // Check if user is not the seller
+        // Seller validation
         if (item.getSeller().getId().equals(user.getId())) {
             throw new BidException("Sellers cannot bid on their own items");
         }
 
-        // Kiểm tra số tiền đặt cọc
-        // Nếu không có giá thầu hiện tại, sử dụng giá khởi điểm
-        // Nếu có giá thầu hiện tại, sử dụng giá thầu hiện tại
+        // Amount validation
         BigDecimal currentPrice = item.getCurrentBidPrice() != null ?
                 item.getCurrentBidPrice() : item.getStartingPrice();
-
         BigDecimal minimumBid = currentPrice.add(item.getMinIncreasePrice());
+
         if (bidAmount.compareTo(minimumBid) < 0) {
             throw new BidException("Bid must be at least " + minimumBid);
         }
 
-        // Check reserve price if set
+        // Reserve price logging (don't throw exception)
         if (item.getReservePrice() != null && bidAmount.compareTo(item.getReservePrice()) < 0) {
             log.info("Bid {} is below reserve price for item {}", bidAmount, item.getId());
-            // Don't throw exception, just log - reserve price is usually hidden
-        }
-    }
-
-    /**
-     * WebSocket broadcast - PRESERVED and enhanced
-     */
-    public void broadcastBidUpdate(Bid bid, Item item) {
-        try {
-            BidUpdateEvent bidUpdateEvent = BidUpdateEvent.builder()
-                    .bidId(bid.getId())
-                    .itemId(item.getId())
-                    .amount(bid.getAmount())
-                    .buyerName(bid.getBuyer().getFirstName() + " " + bid.getBuyer().getLastName())
-                    .buyerId(bid.getBuyer().getId())
-                    .bidTime(bid.getBidTime())
-                    .status(bid.getStatus())
-                    .totalBids(bidRepository.countByItemId(item.getId()))
-                    .build();
-
-            // Broadcast to item-specific topic
-            messagingTemplate.convertAndSend("/topic/item/" + item.getId() + "/bids", bidUpdateEvent);
-
-            // Broadcast to general auction updates
-            messagingTemplate.convertAndSend("/topic/auctions/updates", bidUpdateEvent);
-
-            log.debug("WebSocket bid update broadcasted for item {}", item.getId());
-
-        } catch (Exception e) {
-            log.error("Failed to broadcast bid update via WebSocket: {}", e.getMessage());
-            // Don't throw exception - WebSocket failure shouldn't break bid processing
-        }
-    }
-
-
-    public BigDecimal getCurrentBidFromCache(Long itemId) {
-        try {
-            Object cached = redisTemplate.opsForValue().get(CURRENT_BID_PREFIX + itemId);
-            return cached != null ? new BigDecimal(cached.toString()) : null;
-        } catch (Exception e) {
-            log.warn("Failed to get current bid from cache for item {}: {}", itemId, e.getMessage());
-            return null;
-        }
-    }
-
-    public void updateCurrentBidCache(Long itemId, BigDecimal amount) {
-        try {
-            redisTemplate.opsForValue().set(CURRENT_BID_PREFIX + itemId, amount.toString(), Duration.ofHours(24));
-            log.debug("Updated bid cache for item {} with amount {}", itemId, amount);
-        } catch (Exception e) {
-            log.warn("Failed to update bid cache for item {}: {}", itemId, e.getMessage());
-        }
-    }
-
-    public void releaseLock(String lockKey, String lockValue) {
-        try {
-            String script = "if redis.call('get', KEYS[1]) == ARGV[1] then " +
-                            "return redis.call('del', KEYS[1]) else return 0 end";
-            redisTemplate.execute(
-                    org.springframework.data.redis.core.script.RedisScript.of(script, Long.class),
-                    java.util.Collections.singletonList(lockKey),
-                    lockValue
-            );
-        } catch (Exception e) {
-            log.error("Failed to release lock {}: {}", lockKey, e.getMessage());
         }
     }
 }

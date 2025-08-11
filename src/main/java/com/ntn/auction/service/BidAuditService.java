@@ -38,7 +38,7 @@ public class BidAuditService {
                     .actionType(actionType)
                     .ipAddress(ipAddress)
                     .proxyBid(bid.getProxyBid()) // Use the correct field name
-                    .validationHash(generateValidationHash(bid, actionType))
+                    .validationHash(generateValidationHash(bid, actionType)) // Để làm gì? // Cho  mục đích xác thực tính toàn vẹn của bản ghi
                     .build();
 
             bidAuditLogRepository.save(auditLog);
@@ -60,6 +60,14 @@ public class BidAuditService {
                     bid.getBuyer().getId(),
                     actionType.toString());
 
+            // Generate a SHA-256 hash of the bid data
+            // digest là đối tượng dùng để tính toán băm
+            // dataToHash là chuỗi dữ liệu cần băm, bao gồm ID của bid
+            // số tiền đặt giá, thời gian đặt giá, ID của người mua và loại hànhtype
+            // Kết quả băm sẽ được lưu trữ dưới dạng chuỗi hex
+            // Nếu có lỗi xảy ra trong quá trình tính toán băm, sẽ ghi log lỗi
+            // và trả về một chuỗi lỗi với dấu thời gian hiện tại để phân biệt
+            // các lỗi khác nhau
             byte[] hash = digest.digest(dataToHash.getBytes(StandardCharsets.UTF_8));
             StringBuilder hexString = new StringBuilder();
 

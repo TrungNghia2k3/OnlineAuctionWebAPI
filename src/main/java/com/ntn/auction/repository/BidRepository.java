@@ -24,7 +24,7 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
     void resetHighestBidFlags(@Param("itemId") Long itemId);
 
     @Query("SELECT COUNT(b) FROM Bid b WHERE b.item.id = :itemId")
-    Integer countByItemId(@Param("itemId") Long itemId);
+    Long countByItemId(@Param("itemId") Long itemId);
 
     Optional<Bid> findTopByItemOrderByAmountDesc(Item item);
 

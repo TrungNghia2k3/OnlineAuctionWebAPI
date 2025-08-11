@@ -1,6 +1,5 @@
 package com.ntn.auction.service;
 
-import com.ntn.auction.dto.event.AuctionEndEvent;
 import com.ntn.auction.dto.request.NotificationCreateRequest;
 import com.ntn.auction.dto.response.NotificationResponse;
 import com.ntn.auction.entity.Bid;
@@ -14,11 +13,9 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
@@ -32,8 +29,7 @@ public class NotificationService {
     NotificationRepository notificationRepository;
     BidRepository bidRepository;
     NotificationMapper notificationMapper;
-    SimpMessagingTemplate messagingTemplate;
-
+    WebSocketService webSocketService;
 
     public List<NotificationResponse> getUserNotifications(String userId) {
         List<Notification> notifications = notificationRepository.findByUserIdOrderByNotificationDateDesc(userId);
@@ -71,6 +67,10 @@ public class NotificationService {
         Notification winnerNotification = notificationMapper.toEntity(winnerRequest);
 
         notificationRepository.saveAll(Arrays.asList(sellerNotification, winnerNotification));
+        
+        // Send WebSocket notifications via WebSocketService
+        webSocketService.sendUserNotification(item.getSeller().getId(), sellerNotification);
+        webSocketService.sendUserNotification(winner.getId(), winnerNotification);
     }
 
     public void createExpiredNotification(Item item) {
@@ -83,20 +83,15 @@ public class NotificationService {
 
         Notification expiredNotification = notificationMapper.toEntity(expiredRequest);
         notificationRepository.save(expiredNotification);
+        
+        // Send WebSocket notification via WebSocketService
+        webSocketService.sendUserNotification(item.getSeller().getId(), expiredNotification);
     }
 
     public void sendAuctionEndNotification(Item item, Bid winningBid) {
-        AuctionEndEvent event = AuctionEndEvent.builder()
-                .itemId(item.getId())
-                .itemName(item.getName())
-                .finalPrice(winningBid != null ? winningBid.getAmount() : null)
-                .winnerName(winningBid != null ? winningBid.getBuyer().getUsername() : null)
-                .winnerId(winningBid != null ? winningBid.getBuyer().getId() : null)
-                .endTime(LocalDateTime.now())
-                .totalBids(bidRepository.countByItemId(item.getId()))
-                .build();
-
-        messagingTemplate.convertAndSend("/topic/item/" + item.getId() + "/end", event);
+        Long totalBids = bidRepository.countByItemId(item.getId());
+        // Delegate to WebSocketService for auction end notifications
+        webSocketService.sendAuctionEnd(item, winningBid, totalBids);
         log.info("Sent auction end notification for item {}", item.getId());
     }
 }
