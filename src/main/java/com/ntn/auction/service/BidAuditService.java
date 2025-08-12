@@ -24,9 +24,6 @@ public class BidAuditService {
 
     BidAuditLogRepository bidAuditLogRepository;
 
-    /**
-     * Creates an immutable audit log entry for bid actions
-     */
     @Transactional
     public void logBidAction(Bid bid, BidAuditLog.ActionType actionType, String ipAddress) {
         try {
@@ -51,9 +48,14 @@ public class BidAuditService {
         }
     }
 
-    /**
-     * Generate validation hash for audit integrity
-     */
+    public List<BidAuditLog> getBidAuditLogs(Long bidId) {
+        return bidAuditLogRepository.findByBidIdOrderByTimestampDesc(bidId);
+    }
+
+    public List<BidAuditLog> getItemAuditLogs(Long itemId) {
+        return bidAuditLogRepository.findByItemIdOrderByTimestampDesc(itemId);
+    }
+
     private String generateValidationHash(Bid bid, BidAuditLog.ActionType actionType) {
         try {
             String dataToHash = String.format("%d_%d_%s_%s_%s",
@@ -80,19 +82,5 @@ public class BidAuditService {
             log.error("Error generating validation hash: {}", e.getMessage());
             return "HASH_ERROR";
         }
-    }
-
-    /**
-     * Get audit logs for a specific bid
-     */
-    public List<BidAuditLog> getBidAuditLogs(Long bidId) {
-        return bidAuditLogRepository.findByBidIdOrderByTimestampDesc(bidId);
-    }
-
-    /**
-     * Get audit logs for a specific item
-     */
-    public List<BidAuditLog> getItemAuditLogs(Long itemId) {
-        return bidAuditLogRepository.findByItemIdOrderByTimestampDesc(itemId);
     }
 }

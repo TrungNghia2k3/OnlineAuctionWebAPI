@@ -32,28 +32,28 @@ public class AuctionLifeCycleService {
     // Mappers
     ItemMapper itemMapper;
 
-    // // Focused Service following SRP
+    // Focused Service following SRP
     NotificationService notificationService;
     BidService bidService;
 
-    /**
-     * Scheduled task to process the auction lifecycle every 5 minutes
-     * - Move items from PENDING to UPCOMING/ACTIVE
-     * - Move items from UPCOMING to ACTIVE
-     * - End ACTIVE auctions to SOLD/EXPIRED
-     */
-    @Scheduled(fixedRate = 300000) // 5 phút = 300,000ms
+
+    // Scheduled task to process the auction lifecycle every 5 minutes
+    // - Move items from PENDING to UPCOMING/ACTIVE
+    // - Move items from UPCOMING to ACTIVE
+    // - End ACTIVE auctions to SOLD/EXPIRED
+
+    @Scheduled(fixedRate = 300000) // 5 minutes = 300,000ms
     public void processAuctionLifecycle() {
         log.info("Start processing the auction lifecycle");
 
         try {
-            // 1. Xử lý items từ PENDING -> UPCOMING/ACTIVE
+            // 1. Process items from PENDING -> UPCOMING/ACTIVE
             processApprovedItems();
 
-            // 2. Xử lý items từ UPCOMING -> ACTIVE
+            // 2. Process items from UPCOMING -> ACTIVE
             processUpcomingItems();
 
-            // 3. Xử lý kết thúc đấu giá ACTIVE -> SOLD/EXPIRED
+            // 3. Auction closing processing ACTIVE -> SOLD/EXPIRED
             processActiveItems();
 
             log.info("Complete auction lifecycle processing");
@@ -66,10 +66,8 @@ public class AuctionLifeCycleService {
     private void processApprovedItems() {
         LocalDateTime now = LocalDateTime.now();
 
-        // Tìm các item đã được duyệt (giả sử có trạng thái APPROVED)
-        // Chú ý: Trong entity của bạn không có APPROVED, có thể cần thêm vào enum
-        List<Item> approvedItems = itemRepository.findByStatusAndAuctionStartDateBefore(
-                Item.ItemStatus.PENDING, now);
+        // Find all items that are approved and have auction start date before now
+        List<Item> approvedItems = itemRepository.findByStatusAndAuctionStartDateBefore(Item.ItemStatus.PENDING, now);
 
         for (Item item : approvedItems) {
             ItemUpdateRequest updateRequest = ItemUpdateRequest.builder().build();
@@ -122,33 +120,33 @@ public class AuctionLifeCycleService {
     }
 
     private void processAuctionEnd(Item item) {
-        // Tìm bid cao nhất cho item này
+        // Find the highest bid for this item
         Optional<Bid> highestBidOpt = bidRepository.findTopByItemOrderByAmountDesc(item);
 
         if (highestBidOpt.isPresent()) {
             Bid winningBid = highestBidOpt.get();
 
-            // Cập nhật item thành SOLD
+            // Update item status to SOLD
             ItemUpdateRequest itemUpdate = ItemUpdateRequest.builder()
                     .status(Item.ItemStatus.SOLD)
                     .currentBidPrice(winningBid.getAmount())
                     .build();
             itemMapper.updateFromRequest(itemUpdate, item);
 
-            // Cập nhật tất cả bids của item này
+            // Update the winning bid status
             bidService.updateBidsStatus(item, winningBid);
 
-            // Tạo notifications
+            // Create notifications for the winning bid
             notificationService.createNotifications(item, winningBid.getBuyer());
 
-            // Gửi thông báo WebSocket cho kết thúc đấu giá
+            // Send WebSocket notification for auction end
             notificationService.sendAuctionEndNotification(item, winningBid);
 
             log.info("Item {} was sold to user {} for {}",
                     item.getId(), winningBid.getBuyer().getId(), winningBid.getAmount());
 
         } else {
-            // Không có bid nào -> EXPIRED
+            // No bids were placed, mark item as EXPIRED
             ItemUpdateRequest itemUpdate = ItemUpdateRequest.builder()
                     .status(Item.ItemStatus.EXPIRED)
                     .build();
@@ -156,7 +154,7 @@ public class AuctionLifeCycleService {
 
             notificationService.createExpiredNotification(item);
 
-            // Gửi thông báo WebSocket cho đấu giá hết hạn
+            // Send WebSocket notification for auction end with no bids
             notificationService.sendAuctionEndNotification(item, null);
 
             log.info("Item {} has expired with no bid", item.getId());

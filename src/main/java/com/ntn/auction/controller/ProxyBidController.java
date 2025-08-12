@@ -30,8 +30,7 @@ public class ProxyBidController {
 
     @PostMapping
     @Operation(summary = "Create or update proxy bid", description = "Creates a new proxy bid or updates existing one for the user")
-    public ApiResponse<ProxyBidResponse> createProxyBid(
-            @Valid @RequestBody CreateProxyBidRequest request) {
+    public ApiResponse<ProxyBidResponse> createProxyBid(@Valid @RequestBody CreateProxyBidRequest request) {
 
         log.info("Creating proxy bid for user {} on item {} with max amount {}",
                 request.getUserId(), request.getItemId(), request.getMaxAmount());

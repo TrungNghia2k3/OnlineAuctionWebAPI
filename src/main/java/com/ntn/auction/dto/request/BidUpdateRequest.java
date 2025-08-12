@@ -1,16 +1,15 @@
 package com.ntn.auction.dto.request;
 
 import com.ntn.auction.entity.Bid;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class BidUpdateRequest {
-    private Bid.BidStatus status;
-    private Boolean highestBid;
+    Bid.BidStatus status;
+    Boolean highestBid;
 }

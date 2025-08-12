@@ -39,6 +39,7 @@ public class BidIncrementService {
 
     /**
      * Calculate the minimum valid bid amount for an item
+     *
      * @param currentPrice Current highest bid or starting price
      * @return Minimum valid bid amount
      */

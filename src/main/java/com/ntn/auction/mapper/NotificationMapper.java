@@ -19,7 +19,6 @@ public interface NotificationMapper {
     @Mapping(target = "notificationDate", expression = "java(java.time.LocalDateTime.now())")
     Notification toEntity(NotificationCreateRequest request);
 
-    // Helper methods để map thủ công
     default User toUser(String userId) {
         if (userId == null) return null;
         User user = new User();

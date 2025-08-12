@@ -50,9 +50,6 @@ public class BidService {
     BidIncrementService bidIncrementService;
     ItemService itemService;
 
-    /**
-     * Core bid placement method - orchestrates the entire bidding process
-     */
     @Transactional
     public BidResponse placeBid(CreateBidRequest createBidRequest) {
         String lockKey = redisService.generateLockKey(createBidRequest.getItemId());
@@ -110,6 +107,9 @@ public class BidService {
             // 10. Update item and cache
             updateItemAndCache(item, createBidRequest.getAmount());
 
+            // 10.1. Update minimum increase price based on new bid amount
+            updateMinIncreasePrice(item.getId());
+
             // 11. Audit logging with real IP
             bidAuditService.logBidAction(savedBid, BidAuditLog.ActionType.BID_PLACED, ipAddress);
 
@@ -132,17 +132,11 @@ public class BidService {
         }
     }
 
-    /**
-     * Get all bids for an item
-     */
     public List<BidResponse> getItemBids(Long itemId) {
         List<Bid> bids = bidRepository.findByItemIdOrderByAmountDesc(itemId);
         return bidMapper.toResponseList(bids);
     }
 
-    /**
-     * Update bid statuses at auction end
-     */
     @Transactional
     public void updateBidsStatus(Item item, Bid winningBid) {
         List<Bid> allBids = bidRepository.findByItem(item);
@@ -168,10 +162,6 @@ public class BidService {
         bidRepository.saveAll(allBids);
     }
 
-    /**
-     * Update minimum increase price for an item based on current bid price
-     * This method implements dynamic pricing tiers according to business rules
-     */
     @Transactional
     public void updateMinIncreasePrice(Long itemId) {
         try {
@@ -197,9 +187,6 @@ public class BidService {
         }
     }
 
-    /**
-     * Private helper methods
-     */
     private Bid createAndSaveBid(Item item, User buyer, BigDecimal amount) {
         // Reset previous highest bid flags
         bidRepository.resetHighestBidFlags(item.getId());
@@ -218,9 +205,6 @@ public class BidService {
         return bidRepository.save(newBid);
     }
 
-    /**
-     * Update item and cache after successful bid
-     */
     private void updateItemAndCache(Item item, BigDecimal newBidAmount) {
         // Update current bid price
         item.setCurrentBidPrice(newBidAmount);

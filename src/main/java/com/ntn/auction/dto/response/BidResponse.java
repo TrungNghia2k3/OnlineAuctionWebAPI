@@ -23,4 +23,5 @@ public class BidResponse {
     private Long itemId;
     private String itemName;
     private Boolean highestBid;
+    private Boolean proxyBid;
 }

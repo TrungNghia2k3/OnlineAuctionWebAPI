@@ -24,9 +24,6 @@ public class BidRateLimitService {
     private static final String CONSECUTIVE_BID_PREFIX = "consecutive_bid:";
     private static final String SHILL_DETECTION_PREFIX = "shill_detection:";
 
-    /**
-     * Check rate limiting with dynamic limits based on auction end time
-     */
     public boolean isRateLimited(String userId, Long itemId, LocalDateTime auctionEndDate) {
         Duration timeLeft = Duration.between(LocalDateTime.now(), auctionEndDate);
 
@@ -60,9 +57,6 @@ public class BidRateLimitService {
         return false;
     }
 
-    /**
-     * Detect shill bidding based on IP patterns and behavior
-     */
     public boolean detectShillBidding(String userId, Long itemId, String sellerIp, String bidderIp) {
         // Check if bidder and seller have same IP
         if (sellerIp != null && sellerIp.equals(bidderIp)) {
@@ -82,9 +76,51 @@ public class BidRateLimitService {
         return false;
     }
 
-    /**
-     * Configure rate limits based on time remaining in auction
-     */
+    public void resetConsecutiveBidCounter(Long itemId, String newBidderId) {
+        // In a real implementation, we'd track all users who bid on this item
+        // and reset their consecutive counters when someone else bids
+        String pattern = CONSECUTIVE_BID_PREFIX + itemId + ":*";
+
+        // For simplicity, we'll just reset the specific user's counter
+        // A more sophisticated approach would use Redis patterns to reset all counters
+        log.debug("Resetting consecutive bid counters for item {} after bid by {}", itemId, newBidderId);
+    }
+
+    public boolean isRateLimitedFast(String userId, Long itemId) {
+        try {
+            // Fast check using Redis counters only
+            String userMinuteKey = BID_COUNT_PREFIX + userId + ":minute";
+            String userItemKey = BID_COUNT_PREFIX + userId + ":" + itemId + ":minute";
+
+            // Get current counts (fast Redis operations)
+            Integer userMinuteCount = redisService.getInteger(userMinuteKey);
+            Integer userItemCount = redisService.getInteger(userItemKey);
+
+            // Simple threshold checks (no complex time calculations)
+            if (userMinuteCount != null && userMinuteCount >= 10) { // Fast limit: 10 bids per minute
+                return true;
+            }
+
+            if (userItemCount != null && userItemCount >= 5) { // Fast limit: 5 bids per item per minute
+                return true;
+            }
+
+            // Increment counters for this bid attempt
+            redisService.increment(userMinuteKey);
+            redisService.setExpiry(userMinuteKey, 60); // 1 minute TTL
+
+            redisService.increment(userItemKey);
+            redisService.setExpiry(userItemKey, 60); // 1 minute TTL
+
+            return false;
+
+        } catch (Exception e) {
+            log.error("Error in fast rate limiting for user {} on item {}: {}", userId, itemId, e.getMessage());
+            // Fail open to avoid blocking legitimate bids due to Redis issues
+            return false;
+        }
+    }
+
     private RateLimits configureLimits(Duration timeLeft) {
         if (timeLeft.toHours() > 2) {
             // Early/middle phase: stricter limits to prevent spam
@@ -95,9 +131,6 @@ public class BidRateLimitService {
         }
     }
 
-    /**
-     * Check per-minute bid limit
-     */
     private boolean isPerMinuteLimitExceeded(String userId, int maxBidsPerMinute) {
         String key = RATE_LIMIT_PREFIX + "minute:" + userId;
         Integer currentCount = redisService.getInteger(key);
@@ -117,9 +150,6 @@ public class BidRateLimitService {
         return false;
     }
 
-    /**
-     * Check per-hour bid limit
-     */
     private boolean isPerHourLimitExceeded(String userId, int maxBidsPerHour) {
         String key = RATE_LIMIT_PREFIX + "hour:" + userId;
         Integer currentCount = redisService.getInteger(key);
@@ -139,9 +169,6 @@ public class BidRateLimitService {
         return false;
     }
 
-    /**
-     * Check per-item per-hour bid limit
-     */
     private boolean isPerItemHourLimitExceeded(String userId, Long itemId, int maxBidsPerItemPerHour) {
         String key = RATE_LIMIT_PREFIX + "item_hour:" + userId + ":" + itemId;
         Integer currentCount = redisService.getInteger(key);
@@ -161,9 +188,6 @@ public class BidRateLimitService {
         return false;
     }
 
-    /**
-     * Check consecutive bid limit for an item
-     */
     private boolean isConsecutiveBidLimitExceeded(String userId, Long itemId, int maxConsecutiveBids) {
         String key = CONSECUTIVE_BID_PREFIX + itemId + ":" + userId;
         Integer consecutiveCount = redisService.getInteger(key);
@@ -175,9 +199,6 @@ public class BidRateLimitService {
         return consecutiveCount >= maxConsecutiveBids;
     }
 
-    /**
-     * Update bid counters after successful bid
-     */
     private void updateBidCounters(String userId, Long itemId) {
         // Update consecutive bid counter
         String consecutiveKey = CONSECUTIVE_BID_PREFIX + itemId + ":" + userId;
@@ -189,22 +210,6 @@ public class BidRateLimitService {
         // For now, we'll let it expire naturally
     }
 
-    /**
-     * Reset consecutive bid counter when another user bids
-     */
-    public void resetConsecutiveBidCounter(Long itemId, String newBidderId) {
-        // In a real implementation, we'd track all users who bid on this item
-        // and reset their consecutive counters when someone else bids
-        String pattern = CONSECUTIVE_BID_PREFIX + itemId + ":*";
-
-        // For simplicity, we'll just reset the specific user's counter
-        // A more sophisticated approach would use Redis patterns to reset all counters
-        log.debug("Resetting consecutive bid counters for item {} after bid by {}", itemId, newBidderId);
-    }
-
-    /**
-     * Check for suspicious bidding patterns
-     */
     private boolean isSuspiciousBiddingPattern(String userId, Long itemId) {
         // Check if user is bidding too frequently in a short time
         String patternKey = SHILL_DETECTION_PREFIX + "pattern:" + userId + ":" + itemId;
@@ -226,9 +231,6 @@ public class BidRateLimitService {
         return false;
     }
 
-    /**
-     * Log shill detection data for analysis
-     */
     private void logShillDetectionData(String userId, Long itemId, String ipAddress) {
         String logKey = SHILL_DETECTION_PREFIX + "log:" + itemId;
         String logData = String.format("%s|%s|%s|%s",
@@ -238,9 +240,6 @@ public class BidRateLimitService {
         redisService.setExpiry(logKey, 86400 * 7); // Keep for 7 days
     }
 
-    /**
-     * Inner class to hold rate limit configuration
-     */
     private static class RateLimits {
         final int maxBidsPerMinute;
         final int maxBidsPerHour;
@@ -248,8 +247,7 @@ public class BidRateLimitService {
         final int maxBidsPerItemPerHour;
         final int suspiciousBidThreshold;
 
-        RateLimits(int maxBidsPerMinute, int maxBidsPerHour, int maxConsecutiveBids,
-                   int maxBidsPerItemPerHour, int suspiciousBidThreshold) {
+        RateLimits(int maxBidsPerMinute, int maxBidsPerHour, int maxConsecutiveBids, int maxBidsPerItemPerHour, int suspiciousBidThreshold) {
             this.maxBidsPerMinute = maxBidsPerMinute;
             this.maxBidsPerHour = maxBidsPerHour;
             this.maxConsecutiveBids = maxConsecutiveBids;

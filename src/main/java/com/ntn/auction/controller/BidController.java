@@ -3,6 +3,7 @@ package com.ntn.auction.controller;
 import com.ntn.auction.dto.request.CreateBidRequest;
 import com.ntn.auction.dto.response.ApiResponse;
 import com.ntn.auction.dto.response.BidResponse;
+import com.ntn.auction.service.BidOptimizedService;
 import com.ntn.auction.service.BidService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,10 +22,11 @@ import java.util.List;
 public class BidController {
 
     BidService bidService;
+    BidOptimizedService bidOptimizedService;
 
     @PostMapping
     public ApiResponse<BidResponse> placeBid(@RequestBody @Valid CreateBidRequest createBidRequest) {
-        BidResponse bid = bidService.placeBid(createBidRequest);
+        BidResponse bid = bidOptimizedService.placeBidOptimized(createBidRequest);
         return ApiResponse.<BidResponse>builder().result(bid).build();
     }
 

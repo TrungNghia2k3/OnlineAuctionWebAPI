@@ -18,7 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/images")
+@RequestMapping("/images")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
@@ -26,31 +26,25 @@ public class ImageController {
 
     ImagesStorageService imagesStorageService;
 
-    /**
-     * Upload image endpoint for general image uploads
-     * POST /api/v1/images/upload
-     */
     @PostMapping("/upload")
-    public ResponseEntity<ApiResponse<Map<String, String>>> uploadImage(
-            @RequestParam("file") MultipartFile file) {
-
+    public ResponseEntity<ApiResponse<Map<String, String>>> uploadImage(@RequestParam("file") MultipartFile file) {
         try {
             // Validate file
             if (file.isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(ApiResponse.<Map<String, String>>builder()
-                        .code(400)
-                        .message("Please select a file to upload")
-                        .build());
+                        .body(ApiResponse.<Map<String, String>>builder()
+                                .code(400)
+                                .message("Please select a file to upload")
+                                .build());
             }
 
             // Validate image type
-            if (!imagesStorageService.isValidImageType(file)) {
+            if (imagesStorageService.isValidImageType(file)) {
                 return ResponseEntity.badRequest()
-                    .body(ApiResponse.<Map<String, String>>builder()
-                        .code(400)
-                        .message("Invalid file type. Only JPG, JPEG, PNG, GIF, and WEBP are allowed")
-                        .build());
+                        .body(ApiResponse.<Map<String, String>>builder()
+                                .code(400)
+                                .message("Invalid file type. Only JPG, JPEG, PNG, GIF, and WEBP are allowed")
+                                .build());
             }
 
             // Save file
@@ -63,25 +57,21 @@ public class ImageController {
             log.info("Image uploaded successfully: {}", filename);
 
             return ResponseEntity.ok(ApiResponse.<Map<String, String>>builder()
-                .code(200)
-                .message("Image uploaded successfully")
-                .result(result)
-                .build());
+                    .code(200)
+                    .message("Image uploaded successfully")
+                    .result(result)
+                    .build());
 
         } catch (RuntimeException e) {
             log.error("Error uploading image: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.<Map<String, String>>builder()
-                    .code(500)
-                    .message("Failed to upload image: " + e.getMessage())
-                    .build());
+                    .body(ApiResponse.<Map<String, String>>builder()
+                            .code(500)
+                            .message("Failed to upload image: " + e.getMessage())
+                            .build());
         }
     }
 
-    /**
-     * Get image by filename
-     * GET /api/v1/images/{filename}
-     */
     @GetMapping("/{filename:.+}")
     public ResponseEntity<Resource> getImage(@PathVariable String filename) {
         try {
@@ -91,9 +81,9 @@ public class ImageController {
             String contentType = getContentType(filename);
 
             return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
-                .contentType(MediaType.parseMediaType(contentType))
-                .body(file);
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .body(file);
 
         } catch (RuntimeException e) {
             log.error("Error loading image {}: {}", filename, e.getMessage());
@@ -101,10 +91,6 @@ public class ImageController {
         }
     }
 
-    /**
-     * Delete image by filename
-     * DELETE /api/v1/images/{filename}
-     */
     @DeleteMapping("/{filename}")
     public ResponseEntity<ApiResponse<Void>> deleteImage(@PathVariable String filename) {
         try {
@@ -113,37 +99,30 @@ public class ImageController {
             if (deleted) {
                 log.info("Image deleted successfully: {}", filename);
                 return ResponseEntity.ok(ApiResponse.<Void>builder()
-                    .code(200)
-                    .message("Image deleted successfully")
-                    .build());
+                        .code(200)
+                        .message("Image deleted successfully")
+                        .build());
             } else {
                 return ResponseEntity.notFound()
-                    .build();
+                        .build();
             }
 
         } catch (Exception e) {
             log.error("Error deleting image {}: {}", filename, e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.<Void>builder()
-                    .code(500)
-                    .message("Failed to delete image: " + e.getMessage())
-                    .build());
+                    .body(ApiResponse.<Void>builder()
+                            .code(500)
+                            .message("Failed to delete image: " + e.getMessage())
+                            .build());
         }
     }
 
-    /**
-     * Check if image exists
-     * HEAD /api/v1/images/{filename}
-     */
     @RequestMapping(value = "/{filename}", method = RequestMethod.HEAD)
     public ResponseEntity<Void> checkImageExists(@PathVariable String filename) {
         boolean exists = imagesStorageService.exists(filename);
         return exists ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
     }
 
-    /**
-     * Determine content type based on file extension
-     */
     private String getContentType(String filename) {
         String extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
         return switch (extension) {

@@ -1,16 +1,15 @@
 package com.ntn.auction.dto.request;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class NotificationCreateRequest {
-    private String message;
-    private String userId;
-    private Long itemId;
+    String message;
+    String userId;
+    Long itemId;
 }

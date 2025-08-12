@@ -34,9 +34,6 @@ public class ItemService {
     ItemMapper itemMapper;
     BidIncrementService bidIncrementService;
 
-    /**
-     * Create new auction item with validation
-     */
     @Transactional
     public ItemResponse createItem(ItemCreateRequest request, String sellerId) {
         // Validate seller
@@ -86,9 +83,6 @@ public class ItemService {
         return itemMapper.toResponse(savedItem);
     }
 
-    /**
-     * Update item image URL
-     */
     @Transactional
     public ItemResponse updateItemImage(Long itemId, String imageUrl) {
         Item item = itemRepository.findById(itemId)
@@ -102,42 +96,27 @@ public class ItemService {
         return itemMapper.toResponse(updatedItem);
     }
 
-    /**
-     * Get all items
-     */
     public List<ItemResponse> getAll() {
         List<Item> items = itemRepository.findAll();
         return itemMapper.toResponseList(items);
     }
 
-    /**
-     * Get item by ID
-     */
     public ItemResponse getById(Long id) {
         Item item = itemRepository.findById(id)
             .orElseThrow(() -> new ItemNotFoundException("Item not found: " + id));
         return itemMapper.toResponse(item);
     }
 
-    /**
-     * Get items by seller
-     */
     public List<ItemResponse> getItemsBySeller(String sellerId) {
         List<Item> items = itemRepository.findBySellerIdOrderByAuctionStartDateDesc(sellerId);
         return itemMapper.toResponseList(items);
     }
 
-    /**
-     * Get items by category
-     */
     public List<ItemResponse> getItemsByCategory(Long categoryId) {
         List<Item> items = itemRepository.findByCategoryIdAndStatusOrderByAuctionEndDateAsc(categoryId, Item.ItemStatus.ACTIVE);
         return itemMapper.toResponseList(items);
     }
 
-    /**
-     * Update item status
-     */
     @Transactional
     public void updateItemStatus(Long itemId, Item.ItemStatus status) {
         Item item = itemRepository.findById(itemId)
@@ -149,18 +128,12 @@ public class ItemService {
         log.info("Updated item {} status to: {}", itemId, status);
     }
 
-    /**
-     * Get active auctions
-     */
     public List<ItemResponse> getActiveAuctions() {
         LocalDateTime now = LocalDateTime.now();
         List<Item> activeItems = itemRepository.findActiveAuctions(now);
         return itemMapper.toResponseList(activeItems);
     }
 
-    /**
-     * Get ending soon auctions (next 24 hours)
-     */
     public List<ItemResponse> getEndingSoonAuctions() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime next24Hours = now.plusHours(24);

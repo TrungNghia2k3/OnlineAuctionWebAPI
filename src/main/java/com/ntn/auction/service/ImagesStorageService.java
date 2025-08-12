@@ -152,12 +152,10 @@ public class ImagesStorageService {
      */
     public boolean isValidImageType(MultipartFile file) {
         String contentType = file.getContentType();
-        return contentType != null && (
-            contentType.equals("image/jpeg") ||
-            contentType.equals("image/jpg") ||
-            contentType.equals("image/png") ||
-            contentType.equals("image/gif") ||
-            contentType.equals("image/webp")
-        );
+        return contentType == null || (!contentType.equals("image/jpeg") &&
+                                       !contentType.equals("image/jpg") &&
+                                       !contentType.equals("image/png") &&
+                                       !contentType.equals("image/gif") &&
+                                       !contentType.equals("image/webp"));
     }
 }

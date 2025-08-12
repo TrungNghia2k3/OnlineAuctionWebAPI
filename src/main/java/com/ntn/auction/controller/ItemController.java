@@ -3,15 +3,13 @@ package com.ntn.auction.controller;
 import com.ntn.auction.dto.request.ItemCreateRequest;
 import com.ntn.auction.dto.response.ApiResponse;
 import com.ntn.auction.dto.response.ItemResponse;
-import com.ntn.auction.service.ItemService;
 import com.ntn.auction.service.ImagesStorageService;
+import com.ntn.auction.service.ItemService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,7 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/items")
+@RequestMapping("/items")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
@@ -29,14 +27,8 @@ public class ItemController {
     ItemService itemService;
     ImagesStorageService imagesStorageService;
 
-    /**
-     * Create new auction item
-     * POST /api/v1/items
-     */
     @PostMapping
-    public ResponseEntity<ApiResponse<ItemResponse>> createItem(
-            @Valid @RequestBody ItemCreateRequest request,
-            Authentication authentication) {
+    public ApiResponse<ItemResponse> createItem(@Valid @RequestBody ItemCreateRequest request, Authentication authentication) {
 
         try {
             String sellerId = authentication.getName();
@@ -46,39 +38,29 @@ public class ItemController {
 
             log.info("Item created successfully with ID: {}", createdItem.getId());
 
-            return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.<ItemResponse>builder()
+            return ApiResponse.<ItemResponse>builder()
                     .code(201)
                     .message("Item created successfully")
                     .result(createdItem)
-                    .build());
+                    .build();
 
         } catch (IllegalArgumentException e) {
             log.error("Validation error creating item: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.<ItemResponse>builder()
+            return ApiResponse.<ItemResponse>builder()
                     .code(400)
                     .message(e.getMessage())
-                    .build());
+                    .build();
         } catch (Exception e) {
             log.error("Error creating item: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.<ItemResponse>builder()
+            return ApiResponse.<ItemResponse>builder()
                     .code(500)
                     .message("Failed to create item: " + e.getMessage())
-                    .build());
+                    .build();
         }
     }
 
-    /**
-     * Create item with image upload
-     * POST /api/v1/items/with-image
-     */
     @PostMapping("/with-image")
-    public ResponseEntity<ApiResponse<ItemResponse>> createItemWithImage(
-            @Valid @ModelAttribute ItemCreateRequest request,
-            @RequestParam("image") MultipartFile imageFile,
-            Authentication authentication) {
+    public ApiResponse<ItemResponse> createItemWithImage(@Valid @ModelAttribute ItemCreateRequest request, @RequestParam("image") MultipartFile imageFile, Authentication authentication) {
 
         try {
             String sellerId = authentication.getName();
@@ -86,19 +68,17 @@ public class ItemController {
 
             // Validate image
             if (imageFile.isEmpty()) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.<ItemResponse>builder()
+                return ApiResponse.<ItemResponse>builder()
                         .code(400)
                         .message("Please select an image file")
-                        .build());
+                        .build();
             }
 
-            if (!imagesStorageService.isValidImageType(imageFile)) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.<ItemResponse>builder()
+            if (imagesStorageService.isValidImageType(imageFile)) {
+                return ApiResponse.<ItemResponse>builder()
                         .code(400)
                         .message("Invalid image type. Only JPG, JPEG, PNG, GIF, and WEBP are allowed")
-                        .build());
+                        .build();
             }
 
             // Create item first to get ID
@@ -113,39 +93,29 @@ public class ItemController {
 
             log.info("Item created successfully with image, ID: {}", updatedItem.getId());
 
-            return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.<ItemResponse>builder()
+            return ApiResponse.<ItemResponse>builder()
                     .code(201)
                     .message("Item created successfully with image")
                     .result(updatedItem)
-                    .build());
+                    .build();
 
         } catch (IllegalArgumentException e) {
             log.error("Validation error creating item with image: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.<ItemResponse>builder()
+            return ApiResponse.<ItemResponse>builder()
                     .code(400)
                     .message(e.getMessage())
-                    .build());
+                    .build();
         } catch (Exception e) {
             log.error("Error creating item with image: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.<ItemResponse>builder()
+            return ApiResponse.<ItemResponse>builder()
                     .code(500)
                     .message("Failed to create item with image: " + e.getMessage())
-                    .build());
+                    .build();
         }
     }
 
-    /**
-     * Update item image after creation
-     * PUT /api/v1/items/{itemId}/image
-     */
     @PutMapping("/{itemId}/image")
-    public ResponseEntity<ApiResponse<Map<String, String>>> updateItemImage(
-            @PathVariable Long itemId,
-            @RequestParam("image") MultipartFile imageFile,
-            Authentication authentication) {
+    public ApiResponse<Map<String, String>> updateItemImage(@PathVariable Long itemId, @RequestParam("image") MultipartFile imageFile, Authentication authentication) {
 
         try {
             String sellerId = authentication.getName();
@@ -153,19 +123,17 @@ public class ItemController {
 
             // Validate image
             if (imageFile.isEmpty()) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.<Map<String, String>>builder()
+                return ApiResponse.<Map<String, String>>builder()
                         .code(400)
                         .message("Please select an image file")
-                        .build());
+                        .build();
             }
 
-            if (!imagesStorageService.isValidImageType(imageFile)) {
-                return ResponseEntity.badRequest()
-                    .body(ApiResponse.<Map<String, String>>builder()
+            if (imagesStorageService.isValidImageType(imageFile)) {
+                return ApiResponse.<Map<String, String>>builder()
                         .code(400)
                         .message("Invalid image type. Only JPG, JPEG, PNG, GIF, and WEBP are allowed")
-                        .build());
+                        .build();
             }
 
             // Save image with item ID
@@ -181,26 +149,24 @@ public class ItemController {
 
             log.info("Item image updated successfully for item: {}", itemId);
 
-            return ResponseEntity.ok(ApiResponse.<Map<String, String>>builder()
-                .code(200)
-                .message("Item image updated successfully")
-                .result(result)
-                .build());
+            return ApiResponse.<Map<String, String>>builder()
+                    .code(200)
+                    .message("Item image updated successfully")
+                    .result(result)
+                    .build();
 
         } catch (IllegalArgumentException e) {
             log.error("Validation error updating item image: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.<Map<String, String>>builder()
+            return ApiResponse.<Map<String, String>>builder()
                     .code(400)
                     .message(e.getMessage())
-                    .build());
+                    .build();
         } catch (Exception e) {
             log.error("Error updating item image: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.<Map<String, String>>builder()
+            return ApiResponse.<Map<String, String>>builder()
                     .code(500)
                     .message("Failed to update item image: " + e.getMessage())
-                    .build());
+                    .build();
         }
     }
 }

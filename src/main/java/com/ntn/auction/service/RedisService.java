@@ -1,5 +1,7 @@
 package com.ntn.auction.service;
 
+import com.ntn.auction.dto.BidInfo;
+import com.ntn.auction.entity.Item;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -23,10 +25,11 @@ public class RedisService {
 
     private static final String BID_LOCK_PREFIX = "bid_lock:";
     private static final String CURRENT_BID_PREFIX = "current_bid:";
+    private static final String BID_INFO_PREFIX = "bid_info:";
+    private static final String BID_COUNT_PREFIX = "bid_count:";
+    private static final String ITEM_CACHE_PREFIX = "item:";
+    private static final String ITEM_MIN_INCREMENT_PREFIX = "item_min_increment:";
 
-    /**
-     * Distributed locking operations
-     */
     public boolean acquireLock(String lockKey, String lockValue, Duration expiration) {
         try {
             Boolean acquired = redisTemplate.opsForValue()
@@ -61,9 +64,6 @@ public class RedisService {
         return UUID.randomUUID().toString();
     }
 
-    /**
-     * Bid caching operations
-     */
     public BigDecimal getCurrentBid(Long itemId) {
         try {
             Object value = redisTemplate.opsForValue().get(CURRENT_BID_PREFIX + itemId);
@@ -79,31 +79,28 @@ public class RedisService {
         }
     }
 
-    public void updateItemCache(com.ntn.auction.entity.Item item) {
+    public void updateItemCache(Item item) {
         try {
             // Cache current bid price
             redisTemplate.opsForValue().set(
-                CURRENT_BID_PREFIX + item.getId(), 
+                CURRENT_BID_PREFIX + item.getId(),
                 item.getCurrentBidPrice().toString(),
                 Duration.ofHours(24)
             );
-            
+
             // Cache item details
             String itemKey = "item:" + item.getId();
             redisTemplate.opsForHash().put(itemKey, "currentBidPrice", item.getCurrentBidPrice().toString());
             redisTemplate.opsForHash().put(itemKey, "minIncreasePrice", item.getMinIncreasePrice().toString());
             redisTemplate.opsForHash().put(itemKey, "status", item.getStatus().toString());
             redisTemplate.expire(itemKey, Duration.ofHours(24));
-            
+
             log.debug("Updated cache for item {}", item.getId());
         } catch (Exception e) {
             log.error("Failed to update item cache for item {}: {}", item.getId(), e.getMessage());
         }
     }
 
-    /**
-     * Generic Redis operations
-     */
     public void set(String key, String value) {
         try {
             redisTemplate.opsForValue().set(key, value);
@@ -174,6 +171,121 @@ public class RedisService {
             redisTemplate.delete(key);
         } catch (Exception e) {
             log.error("Failed to delete key {}: {}", key, e.getMessage());
+        }
+    }
+
+    public Long generateBidId() {
+        try {
+            String key = "bid_id_generator";
+            Long bidId = redisTemplate.opsForValue().increment(key);
+            log.debug("Generated new bid ID: {}", bidId);
+            return bidId;
+        } catch (Exception e) {
+            log.error("Failed to generate bid ID: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    public void cacheItem(Item item) {
+        try {
+            String key = ITEM_CACHE_PREFIX + item.getId();
+            redisTemplate.opsForValue().set(key, item, Duration.ofMinutes(30));
+            log.debug("Cached item {} for fast access", item.getId());
+        } catch (Exception e) {
+            log.error("Failed to cache item {}: {}", item.getId(), e.getMessage());
+        }
+    }
+
+    public Item getCachedItem(Long itemId) {
+        try {
+            String key = ITEM_CACHE_PREFIX + itemId;
+            return (Item) redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.error("Failed to get cached item {}: {}", itemId, e.getMessage());
+            return null;
+        }
+    }
+
+    public void cacheBidInfo(Long bidId, String buyerId, Long itemId, BigDecimal amount) {
+        try {
+            String key = BID_INFO_PREFIX + bidId;
+            BidInfo bidInfo = BidInfo.builder()
+                    .bidId(bidId)
+                    .buyerId(buyerId)
+                    .itemId(itemId)
+                    .amount(amount)
+                    .timestamp(System.currentTimeMillis())
+                    .build();
+            redisTemplate.opsForValue().set(key, bidInfo, Duration.ofHours(1));
+            log.debug("Cached bid info for bid {}", bidId);
+        } catch (Exception e) {
+            log.error("Failed to cache bid info for bid {}: {}", bidId, e.getMessage());
+        }
+    }
+
+    public void updateItemMinIncrement(Long itemId, BigDecimal minIncrement) {
+        try {
+            String key = ITEM_MIN_INCREMENT_PREFIX + itemId;
+            redisTemplate.opsForValue().set(key, minIncrement, Duration.ofHours(2));
+            log.debug("Updated min increment for item {} to {}", itemId, minIncrement);
+        } catch (Exception e) {
+            log.error("Failed to update min increment for item {}: {}", itemId, e.getMessage());
+        }
+    }
+
+    public void incrementBidCount(String buyerId, Long itemId) {
+        try {
+            String key = BID_COUNT_PREFIX + buyerId + ":" + itemId;
+            redisTemplate.opsForValue().increment(key);
+            redisTemplate.expire(key, Duration.ofMinutes(5)); // 5-minute window
+        } catch (Exception e) {
+            log.error("Failed to increment bid count for user {} on item {}: {}", buyerId, itemId, e.getMessage());
+        }
+    }
+
+    public void updateBidWithDbId(Long tempBidId, Long dbBidId) {
+        try {
+            String key = BID_INFO_PREFIX + tempBidId;
+            BidInfo bidInfo = (BidInfo) redisTemplate.opsForValue().get(key);
+            if (bidInfo != null) {
+                bidInfo.setDbBidId(dbBidId);
+                redisTemplate.opsForValue().set(key, bidInfo, Duration.ofHours(1));
+                log.debug("Updated bid {} with DB ID {}", tempBidId, dbBidId);
+            }
+        } catch (Exception e) {
+            log.error("Failed to update bid {} with DB ID {}: {}", tempBidId, dbBidId, e.getMessage());
+        }
+    }
+
+    public void revertBidState(Long bidId, Long itemId) {
+        try {
+            // Get previous bid amount from cache or database
+            // This is a simplified revert - in production you might want more sophisticated rollback
+            String bidKey = BID_INFO_PREFIX + bidId;
+            String currentBidKey = CURRENT_BID_PREFIX + itemId;
+
+            // Remove the failed bid info
+            redisTemplate.delete(bidKey);
+
+            // Note: Reverting current bid would require storing previous state
+            // For now, we just log the failure and let background job handle cleanup
+            log.warn("Reverted Redis state for failed bid {} on item {}", bidId, itemId);
+
+        } catch (Exception e) {
+            log.error("Failed to revert Redis state for bid {} on item {}: {}", bidId, itemId, e.getMessage());
+        }
+    }
+
+    public void setCurrentBid(Long itemId, BigDecimal amount) {
+        try {
+            redisTemplate.opsForValue().set(
+                CURRENT_BID_PREFIX + itemId,
+                amount.toString(),
+                Duration.ofHours(24)
+            );
+            log.debug("Set current bid for item {} to {}", itemId, amount);
+        } catch (Exception e) {
+            log.error("Failed to set current bid for item {}: {}", itemId, e.getMessage());
         }
     }
 }

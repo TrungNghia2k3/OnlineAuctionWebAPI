@@ -33,10 +33,6 @@ public class ProxyBidService {
     ItemRepository itemRepository;
     UserRepository userRepository;
 
-    /**
-     * Process proxy bids after a manual bid is placed
-     * FIXED: Now properly updates exceeded proxy bids to OUTBID status
-     */
     @Transactional
     public void processProxyBidsAfterManualBid(Item item, BigDecimal newBidAmount, User excludeUser) {
         // Get ALL active proxy bids for this item
@@ -95,11 +91,6 @@ public class ProxyBidService {
         }
     }
 
-    /**
-     * Create or update proxy bid with enhanced validation
-     * Only allows proxy bids on APPROVED and ACTIVE items
-     * Max amount must be greater than current price + minimum increment
-     */
     @Transactional
     public ProxyBid createOrUpdateProxyBid(String userId, Long itemId, BigDecimal maxAmount) {
         // Fetch and validate entities
@@ -169,23 +160,14 @@ public class ProxyBidService {
         }
     }
 
-    /**
-     * Get all proxy bids for a user
-     */
     public List<ProxyBid> getUserProxyBids(String userId) {
         return proxyBidRepository.findByUserId(userId);
     }
 
-    /**
-     * Get active proxy bids for an item
-     */
     public List<ProxyBid> getActiveProxyBidsForItem(Long itemId) {
         return proxyBidRepository.findActiveProxyBidsForItem(itemId);
     }
 
-    /**
-     * Cancel a proxy bid
-     */
     @Transactional
     public void cancelProxyBid(Long proxyBidId, String userId) {
         ProxyBid proxyBid = proxyBidRepository.findById(proxyBidId)
@@ -203,16 +185,10 @@ public class ProxyBidService {
         log.info("Cancelled proxy bid {} for user {}", proxyBidId, userId);
     }
 
-    /**
-     * Get winning proxy bids for a user
-     */
     public List<ProxyBid> getWinningProxyBidsByUser(String userId) {
         return proxyBidRepository.findWinningProxyBidsByUser(userId);
     }
 
-    /**
-     * Update proxy bid statuses at auction end
-     */
     @Transactional
     public void updateProxyBidsAtAuctionEnd(Item item, Bid winningBid) {
         List<ProxyBid> itemProxyBids = proxyBidRepository.findActiveProxyBidsForItem(item.getId());
@@ -231,9 +207,6 @@ public class ProxyBidService {
         log.info("Updated {} proxy bid statuses for completed auction item {}", itemProxyBids.size(), item.getId());
     }
 
-    /**
-     * Process competing proxy bids to determine final amounts
-     */
     private void processCompetingProxyBids(Item item, BigDecimal currentAmount, ProxyBid winningProxy) {
         List<ProxyBid> competitors = proxyBidRepository.findEligibleProxyBids(item.getId(), currentAmount);
 
@@ -270,9 +243,6 @@ public class ProxyBidService {
         }
     }
 
-    /**
-     * Execute a proxy bid by creating an actual bid
-     */
     private void executeProxyBid(ProxyBid proxyBid, BigDecimal bidAmount, Item item) {
         try {
             // Reset previous highest bid flags

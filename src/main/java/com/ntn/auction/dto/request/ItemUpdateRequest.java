@@ -1,11 +1,8 @@
 package com.ntn.auction.dto.request;
 
-import com.ntn.auction.entity.Bid;
 import com.ntn.auction.entity.Item;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 
@@ -13,7 +10,8 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class ItemUpdateRequest {
-    private Item.ItemStatus status;
-    private BigDecimal currentBidPrice;
+    Item.ItemStatus status;
+    BigDecimal currentBidPrice;
 }
