@@ -47,6 +47,8 @@ public class BidService {
     RedisService redisService;
     WebSocketService webSocketService;
     IpAddressService ipAddressService;
+    BidIncrementService bidIncrementService;
+    ItemService itemService;
 
     /**
      * Core bid placement method - orchestrates the entire bidding process
@@ -59,9 +61,14 @@ public class BidService {
 
         log.info("Processing bid - User: {}, Item: {}, Amount: {}", createBidRequest.getBuyerId(), createBidRequest.getItemId(), createBidRequest.getAmount());
 
+
         try {
+            // Get auction end date of the item
+            Item item = itemRepository.findById(createBidRequest.getItemId())
+                    .orElseThrow(() -> new ItemNotFoundException("Item not found"));
+
             // 1. Rate limiting check
-            if (bidRateLimitService.isRateLimited(createBidRequest.getBuyerId(), createBidRequest.getItemId())) {
+            if (bidRateLimitService.isRateLimited(createBidRequest.getBuyerId(), createBidRequest.getItemId(), item.getAuctionEndDate())) {
                 throw new BidException("Rate limit exceeded. Please wait before placing another bid.");
             }
 
@@ -73,9 +80,6 @@ public class BidService {
             // 3. Fetch and validate entities
             User currentUser = userRepository.findById(createBidRequest.getBuyerId())
                     .orElseThrow(() -> new UserNotFoundException("User not found"));
-
-            Item item = itemRepository.findById(createBidRequest.getItemId())
-                    .orElseThrow(() -> new ItemNotFoundException("Item not found"));
 
             // 4. Cache user IP for future fraud detection
             ipAddressService.cacheUserIp(createBidRequest.getBuyerId(), ipAddress);
@@ -124,6 +128,7 @@ public class BidService {
 
         } finally {
             redisService.releaseLock(lockKey, lockValue);
+            log.info("Released lock for bid processing - User: {}, Item: {}", createBidRequest.getBuyerId(), createBidRequest.getItemId());
         }
     }
 
@@ -164,6 +169,35 @@ public class BidService {
     }
 
     /**
+     * Update minimum increase price for an item based on current bid price
+     * This method implements dynamic pricing tiers according to business rules
+     */
+    @Transactional
+    public void updateMinIncreasePrice(Long itemId) {
+        try {
+            Item item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException("Item not found with ID: " + itemId));
+
+            BigDecimal newMinIncreasePrice = bidIncrementService.calculateMinIncrement(item.getCurrentBidPrice());
+
+            if (!newMinIncreasePrice.equals(item.getMinIncreasePrice())) {
+                item.setMinIncreasePrice(newMinIncreasePrice);
+                itemRepository.save(item);
+
+                // Update cache
+                redisService.updateItemCache(item);
+
+                log.info("Updated min increase price for item {}: {} -> {}",
+                    itemId, item.getMinIncreasePrice(), newMinIncreasePrice);
+            }
+
+        } catch (Exception e) {
+            log.error("Error updating min increase price for item {}: {}", itemId, e.getMessage());
+            throw new RuntimeException("Failed to update minimum increase price", e);
+        }
+    }
+
+    /**
      * Private helper methods
      */
     private Bid createAndSaveBid(Item item, User buyer, BigDecimal amount) {
@@ -184,10 +218,25 @@ public class BidService {
         return bidRepository.save(newBid);
     }
 
-    private void updateItemAndCache(Item item, BigDecimal amount) {
-        item.setCurrentBidPrice(amount);
+    /**
+     * Update item and cache after successful bid
+     */
+    private void updateItemAndCache(Item item, BigDecimal newBidAmount) {
+        // Update current bid price
+        item.setCurrentBidPrice(newBidAmount);
+
+        // Update minimum increase price using dynamic pricing
+        BigDecimal newMinIncreasePrice = bidIncrementService.calculateMinIncrement(newBidAmount);
+        item.setMinIncreasePrice(newMinIncreasePrice);
+
+        // Save to database
         itemRepository.save(item);
-        redisService.updateCurrentBid(item.getId(), amount);
+
+        // Update Redis cache
+        redisService.updateItemCache(item);
+
+        log.info("Updated item {} - new price: {}, new min increment: {}",
+            item.getId(), newBidAmount, newMinIncreasePrice);
     }
 
     private void validateBidRules(Item item, User user, BigDecimal bidAmount) {

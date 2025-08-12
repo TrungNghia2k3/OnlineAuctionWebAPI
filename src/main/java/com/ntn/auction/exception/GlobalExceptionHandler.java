@@ -1,119 +1,98 @@
 package com.ntn.auction.exception;
 
-import java.util.Map;
-import java.util.Objects;
-
-import jakarta.validation.ConstraintViolation;
-
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-
 import com.ntn.auction.dto.response.ApiResponse;
-
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@ControllerAdvice
+import java.util.HashMap;
+import java.util.Map;
+
+@RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
 
-    private static final String MIN_ATTRIBUTE = "min";
-
-    @ExceptionHandler(value = Exception.class)
-    ResponseEntity<ApiResponse> handlingRuntimeException(RuntimeException exception) {
-        ApiResponse apiResponse = new ApiResponse();
-
-        apiResponse.setCode(ErrorCode.UNCATEGORIZED_EXCEPTION.getCode());
-        apiResponse.setMessage(ErrorCode.UNCATEGORIZED_EXCEPTION.getMessage());
-
-        return ResponseEntity.badRequest().body(apiResponse);
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException e) {
+        log.error("Validation error: {}", e.getMessage());
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.<Void>builder()
+                .code(400)
+                .message(e.getMessage())
+                .build());
     }
 
     @ExceptionHandler(BidException.class)
-    public ResponseEntity<ApiResponse<String>> handlingBidException(BidException ex) {
-        ApiResponse<String> apiResponse = new ApiResponse<>();
-        apiResponse.setCode(ErrorCode.BID_EXCEPTION.getCode());
-        apiResponse.setMessage(ex.getMessage());
-
-        return ResponseEntity.status(ErrorCode.BID_EXCEPTION.getStatusCode()).body(apiResponse);
+    public ResponseEntity<ApiResponse<Void>> handleBidException(BidException e) {
+        log.error("Bid error: {}", e.getMessage());
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.<Void>builder()
+                .code(400)
+                .message(e.getMessage())
+                .build());
     }
 
     @ExceptionHandler(ItemNotFoundException.class)
-    public ResponseEntity<ApiResponse<String>> handlingItemNotFound(ItemNotFoundException ex) {
-        ApiResponse<String> apiResponse = new ApiResponse<>();
-        apiResponse.setCode(ErrorCode.ITEM_NOT_FOUND.getCode());
-        apiResponse.setMessage(ex.getMessage());
-
-        return ResponseEntity.status(ErrorCode.ITEM_NOT_FOUND.getStatusCode()).body(apiResponse);
+    public ResponseEntity<ApiResponse<Void>> handleItemNotFoundException(ItemNotFoundException e) {
+        log.error("Item not found: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(ApiResponse.<Void>builder()
+                .code(404)
+                .message(e.getMessage())
+                .build());
     }
 
     @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<ApiResponse<String>> handlingUserNotFound(UserNotFoundException ex) {
-        ApiResponse<String> apiResponse = new ApiResponse<>();
-        apiResponse.setCode(ErrorCode.USER_NOT_FOUND.getCode());
-        apiResponse.setMessage(ex.getMessage());
-
-        return ResponseEntity.status(ErrorCode.USER_NOT_FOUND.getStatusCode()).body(apiResponse);
+    public ResponseEntity<ApiResponse<Void>> handleUserNotFoundException(UserNotFoundException e) {
+        log.error("User not found: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(ApiResponse.<Void>builder()
+                .code(404)
+                .message(e.getMessage())
+                .build());
     }
 
-    @ExceptionHandler(value = AppException.class)
-    ResponseEntity<ApiResponse> handlingAppException(AppException exception) {
-        ErrorCode errorCode = exception.getErrorCode();
-        ApiResponse apiResponse = new ApiResponse();
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationExceptions(
+            MethodArgumentNotValidException e) {
 
-        apiResponse.setCode(errorCode.getCode());
-        apiResponse.setMessage(errorCode.getMessage());
+        Map<String, String> errors = new HashMap<>();
+        e.getBindingResult().getAllErrors().forEach((error) -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
 
-        return ResponseEntity.status(errorCode.getStatusCode()).body(apiResponse);
+        log.error("Validation errors: {}", errors);
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.<Map<String, String>>builder()
+                .code(400)
+                .message("Validation failed")
+                .result(errors)
+                .build());
     }
 
-    @ExceptionHandler(value = AccessDeniedException.class)
-    ResponseEntity<ApiResponse> handlingAccessDeniedException(AccessDeniedException exception) {
-        ErrorCode errorCode = ErrorCode.UNAUTHORIZED;
-
-        return ResponseEntity.status(errorCode.getStatusCode())
-                .body(ApiResponse.builder()
-                        .code(errorCode.getCode())
-                        .message(errorCode.getMessage())
-                        .build());
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRuntimeException(RuntimeException e) {
+        log.error("Runtime error: {}", e.getMessage(), e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(ApiResponse.<Void>builder()
+                .code(500)
+                .message("Internal server error: " + e.getMessage())
+                .build());
     }
 
-    @ExceptionHandler(value = MethodArgumentNotValidException.class)
-    ResponseEntity<ApiResponse> handlingValidation(MethodArgumentNotValidException exception) {
-        String enumKey = exception.getFieldError().getDefaultMessage();
-
-        ErrorCode errorCode = ErrorCode.INVALID_KEY;
-        Map<String, Object> attributes = null;
-        try {
-            errorCode = ErrorCode.valueOf(enumKey);
-
-            var constraintViolation =
-                    exception.getBindingResult().getAllErrors().getFirst().unwrap(ConstraintViolation.class);
-
-            attributes = constraintViolation.getConstraintDescriptor().getAttributes();
-
-            log.info(attributes.toString());
-
-        } catch (IllegalArgumentException e) {
-
-        }
-
-        ApiResponse apiResponse = new ApiResponse();
-
-        apiResponse.setCode(errorCode.getCode());
-        apiResponse.setMessage(
-                Objects.nonNull(attributes)
-                        ? mapAttribute(errorCode.getMessage(), attributes)
-                        : errorCode.getMessage());
-
-        return ResponseEntity.badRequest().body(apiResponse);
-    }
-
-    private String mapAttribute(String message, Map<String, Object> attributes) {
-        String minValue = String.valueOf(attributes.get(MIN_ATTRIBUTE));
-
-        return message.replace("{" + MIN_ATTRIBUTE + "}", minValue);
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception e) {
+        log.error("Unexpected error: {}", e.getMessage(), e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(ApiResponse.<Void>builder()
+                .code(500)
+                .message("An unexpected error occurred")
+                .build());
     }
 }

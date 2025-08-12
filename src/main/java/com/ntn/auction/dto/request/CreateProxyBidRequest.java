@@ -25,7 +25,4 @@ public class CreateProxyBidRequest {
     @NotNull(message = "Max amount is required")
     @DecimalMin(value = "0.01", message = "Max amount must be greater than 0")
     private BigDecimal maxAmount;
-
-    @DecimalMin(value = "0.01", message = "Increment amount must be greater than 0")
-    private BigDecimal incrementAmount;
 }

@@ -23,9 +23,6 @@ public class UpdateItemRequest {
 
     private String imageUrl;
 
-    @DecimalMin(value = "0.01", message = "Minimum increase price must be greater than 0")
-    private BigDecimal minIncreasePrice;
-
     private LocalDateTime auctionStartDate;
 
     private LocalDateTime auctionEndDate;

@@ -34,5 +34,3 @@ build/
 
 ### Secrets ###
 .env
-copilot-instructions.md
-images/

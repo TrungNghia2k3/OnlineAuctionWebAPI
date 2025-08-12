@@ -49,12 +49,12 @@ public class RedisService {
             );
             log.debug("Released lock for key {}", lockKey);
         } catch (Exception e) {
-            log.error("Failed to release lock {}: {}", lockKey, e.getMessage());
+            log.error("Failed to release lock for key {}: {}", lockKey, e.getMessage());
         }
     }
 
-    public String generateLockKey(Object identifier) {
-        return BID_LOCK_PREFIX + identifier;
+    public String generateLockKey(Long itemId) {
+        return BID_LOCK_PREFIX + itemId;
     }
 
     public String generateLockValue() {
@@ -66,74 +66,114 @@ public class RedisService {
      */
     public BigDecimal getCurrentBid(Long itemId) {
         try {
-            Object cached = redisTemplate.opsForValue().get(CURRENT_BID_PREFIX + itemId);
-            return cached != null ? new BigDecimal(cached.toString()) : null;
+            Object value = redisTemplate.opsForValue().get(CURRENT_BID_PREFIX + itemId);
+            if (value instanceof BigDecimal) {
+                return (BigDecimal) value;
+            } else if (value instanceof String) {
+                return new BigDecimal((String) value);
+            }
+            return null;
         } catch (Exception e) {
-            log.warn("Failed to get current bid from cache for item {}: {}", itemId, e.getMessage());
+            log.error("Failed to get current bid for item {}: {}", itemId, e.getMessage());
             return null;
         }
     }
 
-    public void updateCurrentBid(Long itemId, BigDecimal amount) {
+    public void updateItemCache(com.ntn.auction.entity.Item item) {
         try {
+            // Cache current bid price
             redisTemplate.opsForValue().set(
-                    CURRENT_BID_PREFIX + itemId,
-                    amount.toString(),
-                    Duration.ofHours(24)
+                CURRENT_BID_PREFIX + item.getId(), 
+                item.getCurrentBidPrice().toString(),
+                Duration.ofHours(24)
             );
-            log.debug("Updated bid cache for item {} with amount {}", itemId, amount);
+            
+            // Cache item details
+            String itemKey = "item:" + item.getId();
+            redisTemplate.opsForHash().put(itemKey, "currentBidPrice", item.getCurrentBidPrice().toString());
+            redisTemplate.opsForHash().put(itemKey, "minIncreasePrice", item.getMinIncreasePrice().toString());
+            redisTemplate.opsForHash().put(itemKey, "status", item.getStatus().toString());
+            redisTemplate.expire(itemKey, Duration.ofHours(24));
+            
+            log.debug("Updated cache for item {}", item.getId());
         } catch (Exception e) {
-            log.warn("Failed to update bid cache for item {}: {}", itemId, e.getMessage());
-        }
-    }
-
-    public void removeBidCache(Long itemId) {
-        try {
-            redisTemplate.delete(CURRENT_BID_PREFIX + itemId);
-            log.debug("Removed bid cache for item {}", itemId);
-        } catch (Exception e) {
-            log.warn("Failed to remove bid cache for item {}: {}", itemId, e.getMessage());
+            log.error("Failed to update item cache for item {}: {}", item.getId(), e.getMessage());
         }
     }
 
     /**
-     * Generic cache operations
+     * Generic Redis operations
      */
-    public void setValue(String key, Object value, Duration expiration) {
+    public void set(String key, String value) {
         try {
-            redisTemplate.opsForValue().set(key, value, expiration);
+            redisTemplate.opsForValue().set(key, value);
         } catch (Exception e) {
             log.error("Failed to set value for key {}: {}", key, e.getMessage());
         }
     }
 
-    public Object getValue(String key) {
+    public void setWithExpiry(String key, String value, long seconds) {
         try {
-            return redisTemplate.opsForValue().get(key);
+            redisTemplate.opsForValue().set(key, value, Duration.ofSeconds(seconds));
+        } catch (Exception e) {
+            log.error("Failed to set value with expiry for key {}: {}", key, e.getMessage());
+        }
+    }
+
+    public String get(String key) {
+        try {
+            Object value = redisTemplate.opsForValue().get(key);
+            return value != null ? value.toString() : null;
         } catch (Exception e) {
             log.error("Failed to get value for key {}: {}", key, e.getMessage());
             return null;
         }
     }
 
-    public void deleteKey(String key) {
+    public Integer getInteger(String key) {
+        try {
+            Object value = redisTemplate.opsForValue().get(key);
+            if (value instanceof Integer) {
+                return (Integer) value;
+            } else if (value instanceof String) {
+                return Integer.parseInt((String) value);
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to get integer value for key {}: {}", key, e.getMessage());
+            return null;
+        }
+    }
+
+    public void increment(String key) {
+        try {
+            redisTemplate.opsForValue().increment(key);
+        } catch (Exception e) {
+            log.error("Failed to increment value for key {}: {}", key, e.getMessage());
+        }
+    }
+
+    public void setExpiry(String key, long seconds) {
+        try {
+            redisTemplate.expire(key, Duration.ofSeconds(seconds));
+        } catch (Exception e) {
+            log.error("Failed to set expiry for key {}: {}", key, e.getMessage());
+        }
+    }
+
+    public void addToList(String key, String value) {
+        try {
+            redisTemplate.opsForList().rightPush(key, value);
+        } catch (Exception e) {
+            log.error("Failed to add to list for key {}: {}", key, e.getMessage());
+        }
+    }
+
+    public void delete(String key) {
         try {
             redisTemplate.delete(key);
         } catch (Exception e) {
             log.error("Failed to delete key {}: {}", key, e.getMessage());
-        }
-    }
-
-    public Long incrementValue(String key, Duration expiration) {
-        try {
-            Long value = redisTemplate.opsForValue().increment(key);
-            if (value == 1 && expiration != null) {
-                redisTemplate.expire(key, expiration);
-            }
-            return value;
-        } catch (Exception e) {
-            log.error("Failed to increment value for key {}: {}", key, e.getMessage());
-            return 0L;
         }
     }
 }

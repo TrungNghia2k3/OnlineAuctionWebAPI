@@ -1,27 +1,46 @@
 package com.ntn.auction.dto.request;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import jakarta.validation.constraints.*;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class ItemCreateRequest {
-    private String name;
-    private String description;
-    private String imageUrl;
-    private Double minIncreasePrice;
-    private String auctionStartDate; // ISO 8601 format
-    private String auctionEndDate; // ISO 8601 format
-    private Integer antiSnipeExtensionMinutes;
-    private Integer antiSnipeThresholdMinutes;
-    private Integer maxExtensions;
-    private Double reservePrice;
-    private Double startingPrice;
-    private Long categoryId;
 
-    // Getters and Setters
+    @NotBlank(message = "Item name is required")
+    @Size(min = 3, max = 100, message = "Item name must be between 3 and 100 characters")
+    String name;
+
+    @NotBlank(message = "Item description is required")
+    @Size(min = 10, max = 5000, message = "Item description must be between 10 and 5000 characters")
+    String description;
+
+    @NotNull(message = "Starting price is required")
+    @DecimalMin(value = "0.01", message = "Starting price must be greater than 0")
+    @Digits(integer = 15, fraction = 4, message = "Starting price must have at most 15 integer digits and 4 decimal places")
+    BigDecimal startingPrice;
+
+    @NotNull(message = "Category ID is required")
+    @Positive(message = "Category ID must be positive")
+    Long categoryId;
+
+    @NotBlank(message = "Seller ID is required")
+    String sellerId;
+
+    @NotNull(message = "Auction start date is required")
+    @Future(message = "Auction start date must be in the future")
+    LocalDateTime auctionStartDate;
+
+    @NotNull(message = "Auction end date is required")
+    LocalDateTime auctionEndDate;
+
+    // Image URL will be set separately after image upload
+    String imageUrl;
 }

@@ -18,7 +18,9 @@ public enum ErrorCode {
     INVALID_DOB(1008, "Your age must be at least {min}", HttpStatus.BAD_REQUEST),
     BID_EXCEPTION(2001, "Bid exception", HttpStatus.BAD_REQUEST),
     ITEM_NOT_FOUND(2002, "Item not found", HttpStatus.NOT_FOUND),
-    USER_NOT_FOUND(2003, "User not found", HttpStatus.NOT_FOUND)
+    USER_NOT_FOUND(2003, "User not found", HttpStatus.NOT_FOUND),
+    INVALID_ARGUMENT(2004, "Invalid argument", HttpStatus.BAD_REQUEST),
+    INVALID_STATE(2005, "Invalid state", HttpStatus.BAD_REQUEST)
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

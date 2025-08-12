@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 // Index để làm gì?
@@ -52,6 +53,9 @@ public class Category {
 
     @Column(name = "updated_date")
     LocalDateTime updatedDate;
+
+    @Column(name = "min_starting_price", precision = 19, scale = 4, columnDefinition = "DECIMAL(19,4) DEFAULT 1.00")
+    BigDecimal minStartingPrice;
 
     @PrePersist
     protected void onCreate() {

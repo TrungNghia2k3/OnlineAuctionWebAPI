@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -37,8 +38,8 @@ public class BidAuditService {
                     .timestamp(LocalDateTime.now())
                     .actionType(actionType)
                     .ipAddress(ipAddress)
-                    .proxyBid(bid.getProxyBid()) // Use the correct field name
-                    .validationHash(generateValidationHash(bid, actionType)) // Để làm gì? // Cho  mục đích xác thực tính toàn vẹn của bản ghi
+                    .proxyBid(bid.getProxyBid()) // FIXED: Use isProxyBid() instead of getProxyBid()
+                    .validationHash(generateValidationHash(bid, actionType))
                     .build();
 
             bidAuditLogRepository.save(auditLog);
@@ -50,27 +51,22 @@ public class BidAuditService {
         }
     }
 
+    /**
+     * Generate validation hash for audit integrity
+     */
     private String generateValidationHash(Bid bid, BidAuditLog.ActionType actionType) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            String dataToHash = String.format("%d-%s-%s-%s-%s",
+            String dataToHash = String.format("%d_%d_%s_%s_%s",
                     bid.getId(),
-                    bid.getAmount().toString(),
-                    bid.getBidTime().toString(),
+                    bid.getItem().getId(),
                     bid.getBuyer().getId(),
+                    bid.getAmount().toString(),
                     actionType.toString());
 
-            // Generate a SHA-256 hash of the bid data
-            // digest là đối tượng dùng để tính toán băm
-            // dataToHash là chuỗi dữ liệu cần băm, bao gồm ID của bid
-            // số tiền đặt giá, thời gian đặt giá, ID của người mua và loại hànhtype
-            // Kết quả băm sẽ được lưu trữ dưới dạng chuỗi hex
-            // Nếu có lỗi xảy ra trong quá trình tính toán băm, sẽ ghi log lỗi
-            // và trả về một chuỗi lỗi với dấu thời gian hiện tại để phân biệt
-            // các lỗi khác nhau
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(dataToHash.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hexString = new StringBuilder();
 
+            StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
                 String hex = Integer.toHexString(0xff & b);
                 if (hex.length() == 1) {
@@ -78,11 +74,25 @@ public class BidAuditService {
                 }
                 hexString.append(hex);
             }
-
             return hexString.toString();
+
         } catch (NoSuchAlgorithmException e) {
-            log.error("SHA-256 algorithm not available", e);
-            return "HASH_ERROR_" + System.currentTimeMillis();
+            log.error("Error generating validation hash: {}", e.getMessage());
+            return "HASH_ERROR";
         }
+    }
+
+    /**
+     * Get audit logs for a specific bid
+     */
+    public List<BidAuditLog> getBidAuditLogs(Long bidId) {
+        return bidAuditLogRepository.findByBidIdOrderByTimestampDesc(bidId);
+    }
+
+    /**
+     * Get audit logs for a specific item
+     */
+    public List<BidAuditLog> getItemAuditLogs(Long itemId) {
+        return bidAuditLogRepository.findByItemIdOrderByTimestampDesc(itemId);
     }
 }

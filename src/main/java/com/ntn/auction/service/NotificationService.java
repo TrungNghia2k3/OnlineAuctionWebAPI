@@ -90,8 +90,18 @@ public class NotificationService {
 
     public void sendAuctionEndNotification(Item item, Bid winningBid) {
         Long totalBids = bidRepository.countByItemId(item.getId());
-        // Delegate to WebSocketService for auction end notifications
-        webSocketService.sendAuctionEnd(item, winningBid, totalBids);
-        log.info("Sent auction end notification for item {}", item.getId());
+        
+        // Create notifications in database for seller and winner
+        if (winningBid != null) {
+            User winner = winningBid.getBuyer();
+            createNotifications(item, winner);
+        } else {
+            createExpiredNotification(item);
+        }
+        
+        // Send real-time WebSocket notifications
+        webSocketService.sendAuctionEndNotification(item, winningBid);
+        
+        log.info("Sent auction end notification for item {} with {} total bids", item.getId(), totalBids);
     }
 }

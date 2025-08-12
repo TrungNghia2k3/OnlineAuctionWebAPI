@@ -24,10 +24,6 @@ public class CreateItemRequest {
 
     private String imageUrl;
 
-    @NotNull(message = "Minimum increase price is required")
-    @DecimalMin(value = "0.01", message = "Minimum increase price must be greater than 0")
-    private BigDecimal minIncreasePrice;
-
     @NotNull(message = "Auction start date is required")
     @Future(message = "Auction start date must be in the future")
     private LocalDateTime auctionStartDate;

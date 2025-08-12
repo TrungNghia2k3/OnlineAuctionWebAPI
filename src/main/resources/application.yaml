@@ -28,6 +28,10 @@ spring:
       allowed-origins: "*"
       allowed-methods: "*"
       allowed-headers: "*"
+  servlet:
+    multipart:
+      max-file-size: 500KB
+      max-request-size: 500KB
 
 jwt:
   signerKey: ${SIGNING_KEY}

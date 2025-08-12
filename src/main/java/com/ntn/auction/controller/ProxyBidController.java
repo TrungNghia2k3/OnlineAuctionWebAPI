@@ -77,11 +77,14 @@ public class ProxyBidController {
                 .build();
     }
 
-    @DeleteMapping("/{proxyBidId}")
+    @DeleteMapping
     @Operation(summary = "Cancel proxy bid", description = "Cancels an active proxy bid")
-    public ApiResponse<Void> cancelProxyBid(@PathVariable Long proxyBidId) {
+    public ApiResponse<Void> cancelProxyBid(
+            @RequestParam Long proxyBidId,
+            @RequestParam String userId
+    ) {
 
-        proxyBidService.cancelProxyBid(proxyBidId);
+        proxyBidService.cancelProxyBid(proxyBidId, userId);
 
         return ApiResponse.<Void>builder()
                 .message("Proxy bid cancelled successfully")
