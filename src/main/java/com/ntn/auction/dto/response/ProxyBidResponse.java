@@ -1,10 +1,8 @@
 package com.ntn.auction.dto.response;
 
 import com.ntn.auction.entity.ProxyBid;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -13,18 +11,18 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProxyBidResponse {
-
-    private Long id;
-    private Long itemId;
-    private String itemTitle;
-    private String userId;
-    private String userName;
-    private BigDecimal maxAmount;
-    private BigDecimal currentAmount;
-    private BigDecimal incrementAmount;
-    private LocalDateTime createdDate;
-    private LocalDateTime lastBidDate;
-    private ProxyBid.ProxyBidStatus status;
-    private Boolean winning;
+    Long id;
+    Long itemId;
+    String itemTitle;
+    String userId;
+    String userName;
+    BigDecimal maxAmount;
+    BigDecimal currentAmount;
+    BigDecimal incrementAmount;
+    LocalDateTime createdDate;
+    LocalDateTime lastBidDate;
+    ProxyBid.ProxyBidStatus status;
+    Boolean winning;
 }

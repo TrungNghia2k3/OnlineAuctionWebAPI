@@ -1,6 +1,6 @@
 package com.ntn.auction.controller;
 
-import com.ntn.auction.dto.request.CreateProxyBidRequest;
+import com.ntn.auction.dto.request.ProxyBidCreateRequest;
 import com.ntn.auction.dto.response.ApiResponse;
 import com.ntn.auction.dto.response.ProxyBidResponse;
 import com.ntn.auction.entity.ProxyBid;
@@ -30,7 +30,7 @@ public class ProxyBidController {
 
     @PostMapping
     @Operation(summary = "Create or update proxy bid", description = "Creates a new proxy bid or updates existing one for the user")
-    public ApiResponse<ProxyBidResponse> createProxyBid(@Valid @RequestBody CreateProxyBidRequest request) {
+    public ApiResponse<ProxyBidResponse> createProxyBid(@Valid @RequestBody ProxyBidCreateRequest request) {
 
         log.info("Creating proxy bid for user {} on item {} with max amount {}",
                 request.getUserId(), request.getItemId(), request.getMaxAmount());

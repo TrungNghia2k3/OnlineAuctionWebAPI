@@ -2,7 +2,7 @@ package com.ntn.auction.mapper;
 
 import com.ntn.auction.dto.event.BidUpdateEvent;
 import com.ntn.auction.dto.request.BidUpdateRequest;
-import com.ntn.auction.dto.request.CreateBidRequest;
+import com.ntn.auction.dto.request.BidCreateRequest;
 import com.ntn.auction.dto.response.BidResponse;
 import com.ntn.auction.entity.Bid;
 import com.ntn.auction.entity.Item;
@@ -16,10 +16,8 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface BidMapper {
 
-    @Mapping(target = "buyerName", source = "buyer.username")
     @Mapping(target = "buyerId", source = "buyer.id")
     @Mapping(target = "itemId", source = "item.id")
-    @Mapping(target = "itemName", source = "item.name")
     BidResponse toResponse(Bid bid);
 
     @Mapping(target = "buyerName", source = "bid.buyer.username")
@@ -39,7 +37,7 @@ public interface BidMapper {
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "item", source = "item")
     @Mapping(target = "buyer", source = "buyer")
-    Bid toEntity(CreateBidRequest request, Item item, User buyer);
+    Bid toEntity(BidCreateRequest request, Item item, User buyer);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "item", ignore = true)

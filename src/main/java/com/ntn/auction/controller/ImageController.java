@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.MalformedURLException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -78,7 +79,7 @@ public class ImageController {
             Resource file = imagesStorageService.load(filename);
 
             // Determine content type based on file extension
-            String contentType = getContentType(filename);
+            String contentType = imagesStorageService.determineContentType(filename);
 
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
@@ -123,14 +124,26 @@ public class ImageController {
         return exists ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
     }
 
-    private String getContentType(String filename) {
-        String extension = filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
-        return switch (extension) {
-            case "jpg", "jpeg" -> "image/jpeg";
-            case "png" -> "image/png";
-            case "gif" -> "image/gif";
-            case "webp" -> "image/webp";
-            default -> "application/octet-stream";
-        };
+    /**
+     * Get item-specific image - delegates all logic to ImagesStorageService
+     * Following single responsibility principle by keeping controller thin
+     */
+    @GetMapping("/items/{itemId}/{imageName:.+}")
+    public ResponseEntity<Resource> getProductImage(@PathVariable String itemId, @PathVariable String imageName)
+            throws MalformedURLException {
+        try {
+            // Delegate image loading logic to service layer
+            Resource resource = imagesStorageService.loadItemImage(itemId, imageName);
+            String contentType = imagesStorageService.determineContentType(imageName);
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + imageName + "\"")
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .body(resource);
+
+        } catch (RuntimeException e) {
+            log.error("Error loading item image {} for item {}: {}", imageName, itemId, e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
     }
 }

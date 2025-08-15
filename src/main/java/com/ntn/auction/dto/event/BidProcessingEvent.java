@@ -1,7 +1,7 @@
 package com.ntn.auction.dto.event;
 
 import com.ntn.auction.dto.BidValidationResult;
-import com.ntn.auction.dto.request.CreateBidRequest;
+import com.ntn.auction.dto.request.BidCreateRequest;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class BidProcessingEvent {
     Long bidId;
-    CreateBidRequest createBidRequest;
+    BidCreateRequest bidCreateRequest;
     BidValidationResult validationResult;
     String ipAddress;
     LocalDateTime timestamp;

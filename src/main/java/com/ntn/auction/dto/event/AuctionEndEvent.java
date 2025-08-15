@@ -1,23 +1,22 @@
 package com.ntn.auction.dto.event;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Data
-@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @NoArgsConstructor
 @AllArgsConstructor
+@Data
+@Builder
 public class AuctionEndEvent {
-    private Long itemId;
-    private String itemName;
-    private BigDecimal finalPrice;
-    private String winnerName;
-    private String winnerId;
-    private LocalDateTime endTime;
-    private Long totalBids;
+    Long itemId;
+    String itemName;
+    BigDecimal finalPrice;
+    String winnerName;
+    String winnerId;
+    LocalDateTime endTime;
+    Long totalBids;
 }

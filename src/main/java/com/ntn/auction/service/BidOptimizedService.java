@@ -3,7 +3,7 @@ package com.ntn.auction.service;
 import com.ntn.auction.dto.BidNotificationPayload;
 import com.ntn.auction.dto.event.BidProcessingEvent;
 import com.ntn.auction.dto.BidValidationResult;
-import com.ntn.auction.dto.request.CreateBidRequest;
+import com.ntn.auction.dto.request.BidCreateRequest;
 import com.ntn.auction.dto.response.BidResponse;
 import com.ntn.auction.entity.Bid;
 import com.ntn.auction.entity.Item;
@@ -60,13 +60,13 @@ public class BidOptimizedService {
     // Phase 1: Redis-based validation + immediate response
     // Phase 2: Async DB persistence + heavy processing
 
-    public BidResponse placeBidOptimized(CreateBidRequest createBidRequest) {
-        String lockKey = redisService.generateLockKey(createBidRequest.getItemId());
+    public BidResponse placeBidOptimized(BidCreateRequest bidCreateRequest) {
+        String lockKey = redisService.generateLockKey(bidCreateRequest.getItemId());
         String lockValue = redisService.generateLockValue();
         String ipAddress = ipAddressService.getClientIpAddress();
 
         log.info("Processing optimized bid - User: {}, Item: {}, Amount: {}",
-                createBidRequest.getBuyerId(), createBidRequest.getItemId(), createBidRequest.getAmount());
+                bidCreateRequest.getBuyerId(), bidCreateRequest.getItemId(), bidCreateRequest.getAmount());
 
         try {
             // ===== PHASE 1: FAST CRITICAL PATH (Redis-only) =====
@@ -77,24 +77,24 @@ public class BidOptimizedService {
             }
 
             // 2. Fast validation using Redis cache - FAST (~1-2ms total)
-            BidValidationResult validation = performFastValidation(createBidRequest, ipAddress);
+            BidValidationResult validation = performFastValidation(bidCreateRequest, ipAddress);
 
             // 3. Update Redis immediately - FAST (~1ms)
-            Long bidId = updateRedisState(createBidRequest, validation.getItem());
+            Long bidId = updateRedisState(bidCreateRequest, validation.getItem());
 
             // 4. Send real-time notification immediately - ASYNC (~1ms to queue)
-            sendImmediateNotification(createBidRequest, validation.getItem(), bidId);
+            sendImmediateNotification(bidCreateRequest, validation.getItem(), bidId);
 
             // 5. Create immediate response - FAST
-            BidResponse immediateResponse = createImmediateResponse(bidId, createBidRequest, validation.getItem());
+            BidResponse immediateResponse = createImmediateResponse(bidId, bidCreateRequest, validation.getItem());
 
             // ===== PHASE 2: ASYNC HEAVY PROCESSING =====
 
             // 6. Publish event for background processing - ASYNC (~1ms to queue)
-            publishBidProcessingEvent(createBidRequest, validation, bidId, ipAddress);
+            publishBidProcessingEvent(bidCreateRequest, validation, bidId, ipAddress);
 
             log.info("Bid placed successfully (immediate) - ID: {}, Amount: {}",
-                    bidId, createBidRequest.getAmount());
+                    bidId, bidCreateRequest.getAmount());
 
             return immediateResponse;
 
@@ -109,10 +109,10 @@ public class BidOptimizedService {
             log.info("Starting background processing for bid {}", event.getBidId());
 
             // 1. Load entities from DB
-            User buyer = userRepository.findById(event.getCreateBidRequest().getBuyerId())
+            User buyer = userRepository.findById(event.getBidCreateRequest().getBuyerId())
                     .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-            Item item = itemRepository.findById(event.getCreateBidRequest().getItemId())
+            Item item = itemRepository.findById(event.getBidCreateRequest().getItemId())
                     .orElseThrow(() -> new ItemNotFoundException("Item not found"));
 
             // 2. Perform heavy fraud detection
@@ -122,13 +122,13 @@ public class BidOptimizedService {
             Bid persistedBid = createAndPersistBid(event, item, buyer);
 
             // 4. Update item in DB
-            updateItemInDatabase(item, event.getCreateBidRequest().getAmount());
+            updateItemInDatabase(item, event.getBidCreateRequest().getAmount());
 
             // 5. Update minimum increase price in DB
             updateMinIncreasePriceInDb(item.getId());
 
             // 6. Process proxy bids
-            processProxyBidsAsync(item, event.getCreateBidRequest().getAmount(), buyer);
+            processProxyBidsAsync(item, event.getBidCreateRequest().getAmount(), buyer);
 
             // 7. Audit logging
             performAuditLogging(persistedBid, event.getIpAddress());
@@ -149,7 +149,7 @@ public class BidOptimizedService {
 
     // ===== FAST VALIDATION METHODS =====
 
-    private BidValidationResult performFastValidation(CreateBidRequest request, String ipAddress) {
+    private BidValidationResult performFastValidation(BidCreateRequest request, String ipAddress) {
         // Get cached item data
         Item cachedItem = redisService.getCachedItem(request.getItemId());
         if (cachedItem == null) {
@@ -172,6 +172,15 @@ public class BidOptimizedService {
 
         // Fast price validation using cached current bid
         BigDecimal cachedCurrentBid = redisService.getCurrentBid(request.getItemId());
+
+        // Fallback to database current bid if Redis cache is empty (e.g., after server restart)
+        if (cachedCurrentBid == null) {
+            cachedCurrentBid = cachedItem.getCurrentBidPrice() != null ?
+                cachedItem.getCurrentBidPrice() : cachedItem.getStartingPrice();
+            // Update Redis cache with current value for future requests
+            redisService.updateItemCache(cachedItem);
+        }
+
         BigDecimal minimumBid = cachedCurrentBid.add(cachedItem.getMinIncreasePrice());
 
         if (request.getAmount().compareTo(minimumBid) < 0) {
@@ -188,7 +197,7 @@ public class BidOptimizedService {
                 .build();
     }
 
-    private Long updateRedisState(CreateBidRequest request, Item item) {
+    private Long updateRedisState(BidCreateRequest request, Item item) {
         Long bidId = redisService.generateBidId();
 
         // Update current bid price in Redis
@@ -210,7 +219,7 @@ public class BidOptimizedService {
         return bidId;
     }
 
-    private void sendImmediateNotification(CreateBidRequest request, Item item, Long bidId) {
+    private void sendImmediateNotification(BidCreateRequest request, Item item, Long bidId) {
         try {
             // Create lightweight notification payload
             BidNotificationPayload payload = BidNotificationPayload.builder()
@@ -230,7 +239,7 @@ public class BidOptimizedService {
         }
     }
 
-    private BidResponse createImmediateResponse(Long bidId, CreateBidRequest request, Item item) {
+    private BidResponse createImmediateResponse(Long bidId, BidCreateRequest request, Item item) {
         return BidResponse.builder()
                 .id(bidId) // Temporary ID until DB persistence
                 .itemId(request.getItemId())
@@ -243,10 +252,10 @@ public class BidOptimizedService {
                 .build();
     }
 
-    private void publishBidProcessingEvent(CreateBidRequest request, BidValidationResult validation, Long bidId, String ipAddress) {
+    private void publishBidProcessingEvent(BidCreateRequest request, BidValidationResult validation, Long bidId, String ipAddress) {
         BidProcessingEvent event = BidProcessingEvent.builder()
                 .bidId(bidId)
-                .createBidRequest(request)
+                .bidCreateRequest(request)
                 .validationResult(validation)
                 .ipAddress(ipAddress)
                 .timestamp(LocalDateTime.now())
@@ -262,14 +271,14 @@ public class BidOptimizedService {
         // Heavy fraud detection that was removed from critical path
         String sellerIp = ipAddressService.getSellerIpAddress(item.getSeller().getId());
         if (bidRateLimitService.detectShillBidding(
-                event.getCreateBidRequest().getBuyerId(),
-                event.getCreateBidRequest().getItemId(),
+                event.getBidCreateRequest().getBuyerId(),
+                event.getBidCreateRequest().getItemId(),
                 sellerIp,
                 event.getIpAddress())) {
             throw new BidException("Suspicious bidding pattern detected");
         }
 
-        if (ipAddressService.isSameIpAddress(event.getCreateBidRequest().getBuyerId(), item.getSeller().getId())) {
+        if (ipAddressService.isSameIpAddress(event.getBidCreateRequest().getBuyerId(), item.getSeller().getId())) {
             throw new BidException("Bidding from same IP as seller is not allowed");
         }
     }
@@ -282,7 +291,7 @@ public class BidOptimizedService {
         Bid newBid = Bid.builder()
                 .item(item)
                 .buyer(buyer)
-                .amount(event.getCreateBidRequest().getAmount())
+                .amount(event.getBidCreateRequest().getAmount())
                 .bidTime(LocalDateTime.now())
                 .status(Bid.BidStatus.ACCEPTED)
                 .highestBid(true)
@@ -353,7 +362,7 @@ public class BidOptimizedService {
 
         // Revert Redis state if DB processing failed
         try {
-            redisService.revertBidState(event.getBidId(), event.getCreateBidRequest().getItemId());
+            redisService.revertBidState(event.getBidId(), event.getBidCreateRequest().getItemId());
         } catch (Exception revertError) {
             log.error("Failed to revert Redis state for failed bid {}: {}", event.getBidId(), revertError.getMessage());
         }

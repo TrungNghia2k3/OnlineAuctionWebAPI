@@ -21,18 +21,18 @@ import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 
 @Configuration
-@RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@RequiredArgsConstructor
 @Slf4j
 public class ApplicationInitConfig {
 
     PasswordEncoder passwordEncoder;
 
     @NonFinal
-    static final String ADMIN_USER_NAME = "admin";
+    static String ADMIN_USER_NAME = "admin";
 
     @NonFinal
-    static final String ADMIN_PASSWORD = "admin";
+    static String ADMIN_PASSWORD = "admin";
 
     @Bean
     @ConditionalOnProperty(

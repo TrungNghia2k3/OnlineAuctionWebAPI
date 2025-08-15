@@ -34,7 +34,7 @@ public class SecurityConfig {
             "/bids/**",
             "/items/**",
             "/categories/**",
-            "/images/item/**",
+            "/images/items/**",
     };
 
     // Custom JWT decoder bean

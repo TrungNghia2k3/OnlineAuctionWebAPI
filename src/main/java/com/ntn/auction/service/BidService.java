@@ -1,7 +1,7 @@
 package com.ntn.auction.service;
 
 import com.ntn.auction.dto.request.BidUpdateRequest;
-import com.ntn.auction.dto.request.CreateBidRequest;
+import com.ntn.auction.dto.request.BidCreateRequest;
 import com.ntn.auction.dto.response.BidResponse;
 import com.ntn.auction.entity.Bid;
 import com.ntn.auction.entity.BidAuditLog;
@@ -51,21 +51,21 @@ public class BidService {
     ItemService itemService;
 
     @Transactional
-    public BidResponse placeBid(CreateBidRequest createBidRequest) {
-        String lockKey = redisService.generateLockKey(createBidRequest.getItemId());
+    public BidResponse placeBid(BidCreateRequest bidCreateRequest) {
+        String lockKey = redisService.generateLockKey(bidCreateRequest.getItemId());
         String lockValue = redisService.generateLockValue();
         String ipAddress = ipAddressService.getClientIpAddress();
 
-        log.info("Processing bid - User: {}, Item: {}, Amount: {}", createBidRequest.getBuyerId(), createBidRequest.getItemId(), createBidRequest.getAmount());
+        log.info("Processing bid - User: {}, Item: {}, Amount: {}", bidCreateRequest.getBuyerId(), bidCreateRequest.getItemId(), bidCreateRequest.getAmount());
 
 
         try {
             // Get auction end date of the item
-            Item item = itemRepository.findById(createBidRequest.getItemId())
+            Item item = itemRepository.findById(bidCreateRequest.getItemId())
                     .orElseThrow(() -> new ItemNotFoundException("Item not found"));
 
             // 1. Rate limiting check
-            if (bidRateLimitService.isRateLimited(createBidRequest.getBuyerId(), createBidRequest.getItemId(), item.getAuctionEndDate())) {
+            if (bidRateLimitService.isRateLimited(bidCreateRequest.getBuyerId(), bidCreateRequest.getItemId(), item.getAuctionEndDate())) {
                 throw new BidException("Rate limit exceeded. Please wait before placing another bid.");
             }
 
@@ -75,37 +75,37 @@ public class BidService {
             }
 
             // 3. Fetch and validate entities
-            User currentUser = userRepository.findById(createBidRequest.getBuyerId())
+            User currentUser = userRepository.findById(bidCreateRequest.getBuyerId())
                     .orElseThrow(() -> new UserNotFoundException("User not found"));
 
             // 4. Cache user IP for future fraud detection
-            ipAddressService.cacheUserIp(createBidRequest.getBuyerId(), ipAddress);
+            ipAddressService.cacheUserIp(bidCreateRequest.getBuyerId(), ipAddress);
 
             // 5. Shill bidding detection with real IPs
             String sellerIp = ipAddressService.getSellerIpAddress(item.getSeller().getId());
-            if (bidRateLimitService.detectShillBidding(createBidRequest.getBuyerId(), createBidRequest.getItemId(), sellerIp, ipAddress)) {
+            if (bidRateLimitService.detectShillBidding(bidCreateRequest.getBuyerId(), bidCreateRequest.getItemId(), sellerIp, ipAddress)) {
                 throw new BidException("Suspicious bidding pattern detected");
             }
 
             // 6. Enhanced IP-based fraud detection
-            if (ipAddressService.isSameIpAddress(createBidRequest.getBuyerId(), item.getSeller().getId())) {
+            if (ipAddressService.isSameIpAddress(bidCreateRequest.getBuyerId(), item.getSeller().getId())) {
                 throw new BidException("Bidding from same IP as seller is not allowed");
             }
 
             // 7. Business validation
-            validateBidRules(item, currentUser, createBidRequest.getAmount());
+            validateBidRules(item, currentUser, bidCreateRequest.getAmount());
 
             // 8. Cache validation
-            BigDecimal cachedCurrentBid = redisService.getCurrentBid(createBidRequest.getItemId());
-            if (cachedCurrentBid != null && createBidRequest.getAmount().compareTo(cachedCurrentBid) <= 0) {
+            BigDecimal cachedCurrentBid = redisService.getCurrentBid(bidCreateRequest.getItemId());
+            if (cachedCurrentBid != null && bidCreateRequest.getAmount().compareTo(cachedCurrentBid) <= 0) {
                 throw new BidException("Bid amount must be higher than current bid: " + cachedCurrentBid);
             }
 
             // 9. Create and save bid
-            Bid savedBid = createAndSaveBid(item, currentUser, createBidRequest.getAmount());
+            Bid savedBid = createAndSaveBid(item, currentUser, bidCreateRequest.getAmount());
 
             // 10. Update item and cache
-            updateItemAndCache(item, createBidRequest.getAmount());
+            updateItemAndCache(item, bidCreateRequest.getAmount());
 
             // 10.1. Update minimum increase price based on new bid amount
             updateMinIncreasePrice(item.getId());
@@ -114,10 +114,10 @@ public class BidService {
             bidAuditService.logBidAction(savedBid, BidAuditLog.ActionType.BID_PLACED, ipAddress);
 
             // 12. Log IP activity for audit
-            ipAddressService.logIpActivity(createBidRequest.getBuyerId(), ipAddress, "BID_PLACED");
+            ipAddressService.logIpActivity(bidCreateRequest.getBuyerId(), ipAddress, "BID_PLACED");
 
             // 13. Process proxy bids
-            proxyBidService.processProxyBidsAfterManualBid(item, createBidRequest.getAmount(), currentUser);
+            proxyBidService.processProxyBidsAfterManualBid(item, bidCreateRequest.getAmount(), currentUser);
 
             // 14. Real-time notifications
             Long totalBids = bidRepository.countByItemId(item.getId());
@@ -128,7 +128,7 @@ public class BidService {
 
         } finally {
             redisService.releaseLock(lockKey, lockValue);
-            log.info("Released lock for bid processing - User: {}, Item: {}", createBidRequest.getBuyerId(), createBidRequest.getItemId());
+            log.info("Released lock for bid processing - User: {}, Item: {}", bidCreateRequest.getBuyerId(), bidCreateRequest.getItemId());
         }
     }
 

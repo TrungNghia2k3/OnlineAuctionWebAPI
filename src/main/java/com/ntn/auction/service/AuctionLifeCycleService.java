@@ -1,6 +1,6 @@
 package com.ntn.auction.service;
 
-import com.ntn.auction.dto.request.ItemUpdateRequest;
+import com.ntn.auction.dto.request.ItemAuctionUpdateRequest;
 import com.ntn.auction.entity.Bid;
 import com.ntn.auction.entity.Item;
 import com.ntn.auction.mapper.ItemMapper;
@@ -24,7 +24,6 @@ import java.util.Optional;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
 public class AuctionLifeCycleService {
-
     // Repositories
     ItemRepository itemRepository;
     BidRepository bidRepository;
@@ -35,7 +34,6 @@ public class AuctionLifeCycleService {
     // Focused Service following SRP
     NotificationService notificationService;
     BidService bidService;
-
 
     // Scheduled task to process the auction lifecycle every 5 minutes
     // - Move items from PENDING to UPCOMING/ACTIVE
@@ -60,6 +58,7 @@ public class AuctionLifeCycleService {
 
         } catch (Exception e) {
             log.error("Error while processing auction lifecycle: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to process auction lifecycle", e);
         }
     }
 
@@ -70,7 +69,7 @@ public class AuctionLifeCycleService {
         List<Item> approvedItems = itemRepository.findByStatusAndAuctionStartDateBefore(Item.ItemStatus.PENDING, now);
 
         for (Item item : approvedItems) {
-            ItemUpdateRequest updateRequest = ItemUpdateRequest.builder().build();
+            ItemAuctionUpdateRequest updateRequest = ItemAuctionUpdateRequest.builder().build();
 
             if (item.getAuctionStartDate().isBefore(now) || item.getAuctionStartDate().isEqual(now)) {
                 updateRequest.setStatus(Item.ItemStatus.ACTIVE);
@@ -80,7 +79,7 @@ public class AuctionLifeCycleService {
                 log.info("Change item {} to UPCOMING status", item.getId());
             }
 
-            itemMapper.updateFromRequest(updateRequest, item);
+            itemMapper.mapItemAuctionUpdate(updateRequest, item);
         }
 
         if (!approvedItems.isEmpty()) {
@@ -95,11 +94,11 @@ public class AuctionLifeCycleService {
                 Item.ItemStatus.UPCOMING, now);
 
         for (Item item : upcomingItems) {
-            ItemUpdateRequest updateRequest = ItemUpdateRequest.builder()
+            ItemAuctionUpdateRequest updateRequest = ItemAuctionUpdateRequest.builder()
                     .status(Item.ItemStatus.ACTIVE)
                     .build();
 
-            itemMapper.updateFromRequest(updateRequest, item);
+            itemMapper.mapItemAuctionUpdate(updateRequest, item);
             log.info("Move item {} from UPCOMING to ACTIVE", item.getId());
         }
 
@@ -127,11 +126,11 @@ public class AuctionLifeCycleService {
             Bid winningBid = highestBidOpt.get();
 
             // Update item status to SOLD
-            ItemUpdateRequest itemUpdate = ItemUpdateRequest.builder()
+            ItemAuctionUpdateRequest itemUpdate = ItemAuctionUpdateRequest.builder()
                     .status(Item.ItemStatus.SOLD)
                     .currentBidPrice(winningBid.getAmount())
                     .build();
-            itemMapper.updateFromRequest(itemUpdate, item);
+            itemMapper.mapItemAuctionUpdate(itemUpdate, item);
 
             // Update the winning bid status
             bidService.updateBidsStatus(item, winningBid);
@@ -147,10 +146,10 @@ public class AuctionLifeCycleService {
 
         } else {
             // No bids were placed, mark item as EXPIRED
-            ItemUpdateRequest itemUpdate = ItemUpdateRequest.builder()
+            ItemAuctionUpdateRequest itemUpdate = ItemAuctionUpdateRequest.builder()
                     .status(Item.ItemStatus.EXPIRED)
                     .build();
-            itemMapper.updateFromRequest(itemUpdate, item);
+            itemMapper.mapItemAuctionUpdate(itemUpdate, item);
 
             notificationService.createExpiredNotification(item);
 

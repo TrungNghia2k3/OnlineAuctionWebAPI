@@ -35,8 +35,8 @@ spring:
 
 jwt:
   signerKey: ${SIGNING_KEY}
-  valid-duration: 3600 # in second
-  refreshable-duration: 36000 # in seconds
+  valid-duration: 86400 # in second
+  refreshable-duration: 172800 # in seconds
 
 # Auction-specific configurations
 auction:

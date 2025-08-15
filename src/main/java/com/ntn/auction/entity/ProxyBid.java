@@ -54,8 +54,6 @@ public class ProxyBid {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    // Using EnumType.STRING to store the enum as a string in the database
-    // and columnDefinition to ensure the default value is 'ACTIVE'
     @Builder.Default
     ProxyBidStatus status = ProxyBidStatus.ACTIVE;
 
@@ -64,11 +62,11 @@ public class ProxyBid {
     Boolean winning = false;
 
     public enum ProxyBidStatus {
-        ACTIVE,     // Hiện tại đang hoạt động
-        EXHAUSTED,  // Đã sử dụng hết số tiền tối đa
-        OUTBID,     // Đã bị vượt giá bởi một người dùng khác
-        WON,        // Đã thắng cuộc đấu giá
-        CANCELLED   // Đã bị hủy
+        ACTIVE,     // Currently active
+        EXHAUSTED,  // Maximum amount used
+        OUTBID,     // Outbid by another user
+        WON,        // Won the auction
+        CANCELLED   // Canceled
     }
 
     @PrePersist

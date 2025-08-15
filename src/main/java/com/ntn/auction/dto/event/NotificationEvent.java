@@ -1,21 +1,20 @@
 package com.ntn.auction.dto.event;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
 
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class NotificationEvent {
-    private Long id;
-    private String message;
-    private Long itemId;
-    private String itemName;
-    private LocalDateTime notificationDate;
-    private Boolean read;
+    Long id;
+    String message;
+    Long itemId;
+    String itemName;
+    LocalDateTime notificationDate;
+    Boolean read;
 }

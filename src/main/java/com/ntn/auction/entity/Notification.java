@@ -31,14 +31,12 @@ public class Notification {
 
     @Builder.Default
     @Column(name = "is_read", nullable = false)
-    // Using columnDefinition to ensure the default value is false
-    // This ensures that the database will set the default value to false
     Boolean read = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "fk_notification_user"))
-    @ToString.Exclude // Exclude this field from toString to avoid circular references
-    @EqualsAndHashCode.Exclude // Exclude this field from equals and hashCode to avoid circular references
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     User user;
 
     @ManyToOne(fetch = FetchType.LAZY)

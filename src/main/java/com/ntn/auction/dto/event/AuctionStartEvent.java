@@ -1,21 +1,20 @@
 package com.ntn.auction.dto.event;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class AuctionStartEvent {
-    private Long itemId;
-    private String itemName;
-    private BigDecimal startingPrice;
-    private LocalDateTime startTime;
-    private LocalDateTime endTime;
+    Long itemId;
+    String itemName;
+    BigDecimal startingPrice;
+    LocalDateTime startTime;
+    LocalDateTime endTime;
 }

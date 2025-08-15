@@ -48,27 +48,27 @@ public class BidAuditLog {
     ActionType actionType;
 
     @Column(name = "ip_address", length = 45)
-    String ipAddress; // Độ dài 45 để hỗ trợ cả IPv4 và IPv6
+    String ipAddress;
 
     @Column(name = "user_agent", length = 500)
-    String userAgent; // Độ dài 500 để chứa thông tin User-Agent đầy đủ
+    String userAgent;
 
     @Column(name = "session_id")
-    String sessionId; // ID phiên làm việc của người dùng
+    String sessionId;
 
     @Builder.Default
     @Column(name = "is_proxy_bid", nullable = false)
     Boolean proxyBid = false;
 
     @Column(name = "validation_hash", nullable = false, length = 256)
-    String validationHash; // Mã băm để xác thực tính toàn vẹn của bản ghi
+    String validationHash;
 
     public enum ActionType {
-        BID_PLACED,         // Đặt giá thầu mới
-        BID_OUTBID,         // Giá thầu bị vượt
-        BID_WON,            // Giá thầu thắng
-        BID_CANCELLED,      // Giá thầu bị hủy
-        PROXY_BID_EXECUTED  // Thực hiện giá thầu proxy
+        BID_PLACED,         // Place a new bid
+        BID_OUTBID,         // Bid exceeded
+        BID_WON,            // Bid won
+        BID_CANCELLED,      // Bid canceled
+        PROXY_BID_EXECUTED  // Execute proxy bid
     }
 
     @PrePersist

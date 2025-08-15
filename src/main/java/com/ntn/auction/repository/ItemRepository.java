@@ -24,20 +24,4 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     @Query("SELECT i FROM Item i WHERE i.status = 'ACTIVE' AND i.auctionEndDate BETWEEN :now AND :endTime")
     List<Item> findEndingSoonAuctions(@Param("now") LocalDateTime now, @Param("endTime") LocalDateTime endTime);
-
-    List<Item> findByStatus(Item.ItemStatus status);
-
-    List<Item> findBySellerIdAndStatus(String sellerId, Item.ItemStatus status);
-
-    @Query("SELECT i FROM Item i WHERE i.status = 'ACTIVE' AND i.auctionEndDate < :now")
-    List<Item> findExpiredAuctions(@Param("now") LocalDateTime now);
-
-    @Query("SELECT i FROM Item i WHERE i.status = 'APPROVED' AND i.auctionStartDate BETWEEN :now AND :startTime")
-    List<Item> findItemsStartingSoon(@Param("now") LocalDateTime now, @Param("startTime") LocalDateTime startTime);
-
-    long countBySellerId(String sellerId);
-
-    long countByCategoryId(Long categoryId);
-
-    List<Item> findByNameContainingIgnoreCase(String name);
 }

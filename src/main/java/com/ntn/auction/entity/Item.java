@@ -6,6 +6,8 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "item", indexes = {
@@ -31,7 +33,7 @@ public class Item {
     String name;
 
     @Column(name = "description", columnDefinition = "TEXT", nullable = false)
-    @Lob // Sử dụng @Lob để lưu trữ văn bản dài trong cơ sở dữ liệu
+    @Lob
     String description;
 
     @Column(name = "image_url", length = 100)
@@ -41,7 +43,6 @@ public class Item {
     BigDecimal minIncreasePrice;
 
     @Column(name = "current_bid_price", precision = 19, scale = 4, columnDefinition = "DECIMAL(19,4) DEFAULT 0.0000")
-    // Phải là 0.0000 để đảm bảo tính chính xác của giá trị tiền tệ vì scale là 4
     BigDecimal currentBidPrice;
 
     @Column(name = "auction_start_date", columnDefinition = "TIMESTAMP", nullable = false)
@@ -50,15 +51,14 @@ public class Item {
     @Column(name = "auction_end_date", columnDefinition = "TIMESTAMP", nullable = false)
     LocalDateTime auctionEndDate;
 
-    // Anti-sniping fields - will be added via migration
     @Column(name = "original_end_date", columnDefinition = "TIMESTAMP")
     LocalDateTime originalEndDate;
 
-    @Builder.Default // Sử dụng @Builder.Default để đảm bảo giá trị mặc định khi sử dụng Builder
+    @Builder.Default
     @Column(name = "anti_snipe_extension_minutes", columnDefinition = "INTEGER DEFAULT 5")
     Integer antiSnipeExtensionMinutes = 5;
 
-    @Builder.Default // Sử dụng @Builder.Default để đảm bảo giá trị mặc định khi sử dụng Builder
+    @Builder.Default
     @Column(name = "anti_snipe_threshold_minutes", columnDefinition = "INTEGER DEFAULT 2")
     Integer antiSnipeThresholdMinutes = 2;
 
@@ -70,7 +70,6 @@ public class Item {
     @Column(name = "current_extensions", columnDefinition = "INTEGER DEFAULT 0")
     Integer currentExtensions = 0;
 
-    // Reserve price fields - will be added via migration
     @Column(name = "reserve_price", precision = 19, scale = 4, columnDefinition = "DECIMAL(19,4) DEFAULT 0.00")
     BigDecimal reservePrice;
 
@@ -79,19 +78,10 @@ public class Item {
 
     @Builder.Default
     @Column(name = "is_reserve_met")
-    // Sử dụng columnDefinition để đảm bảo giá trị mặc định là false
-    // Điều này giúp tránh việc phải kiểm tra null trong mã và đảm bảo tính nhất quán
-    // của dữ liệu trong cơ sở dữ liệu.
-    // Khi sử dụng @Builder.Default, giá trị này sẽ được khởi tạo là false
-    // khi tạo đối tượng Item mới thông qua Builder.
-    // Điều này giúp đảm bảo rằng khi một Item được tạo ra, trường reserveMet
-    // sẽ luôn có giá trị mặc định là false, trừ khi được chỉ định khác
-    // trong quá trình khởi tạo.
     Boolean reserveMet = false;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    // Sử dụng columnDefinition để đảm bảo giá trị mặc định là 'PENDING'
     @Builder.Default
     ItemStatus status = ItemStatus.PENDING;
 
@@ -103,9 +93,15 @@ public class Item {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "seller_id", nullable = false, foreignKey = @ForeignKey(name = "fk_item_seller"))
-    @ToString.Exclude // Loại trừ trường này khỏi phương thức toString để tránh vòng lặp vô hạn
-    @EqualsAndHashCode.Exclude // Ngăn vòng lặp vô hạn trong JSON serialization
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     User seller;
+
+    @OneToMany(mappedBy = "item", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    List<ItemImage> images = new ArrayList<>();
+
 
     @PrePersist
     protected void onCreate() {

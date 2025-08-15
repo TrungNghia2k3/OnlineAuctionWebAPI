@@ -1,10 +1,8 @@
 package com.ntn.auction.dto.response;
 
 import com.ntn.auction.entity.Bid;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -13,15 +11,14 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class BidResponse {
-    private Long id;
-    private BigDecimal amount;
-    private LocalDateTime bidTime;
-    private Bid.BidStatus status;
-    private String buyerName;
-    private String buyerId;
-    private Long itemId;
-    private String itemName;
-    private Boolean highestBid;
-    private Boolean proxyBid;
+    Long id;
+    BigDecimal amount;
+    LocalDateTime bidTime;
+    Bid.BidStatus status;
+    String buyerId;
+    Long itemId;
+    Boolean highestBid;
+    Boolean proxyBid;
 }

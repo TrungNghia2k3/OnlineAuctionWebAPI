@@ -1,25 +1,24 @@
 package com.ntn.auction.dto.event;
 
 import com.ntn.auction.entity.Bid;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class BidUpdateEvent {
-    private Long itemId;
-    private Long bidId;
-    private BigDecimal amount;
-    private LocalDateTime bidTime;
-    private String buyerName;
-    private String buyerId;
-    private Bid.BidStatus status;
-    private Long totalBids;
+    Long itemId;
+    Long bidId;
+    BigDecimal amount;
+    LocalDateTime bidTime;
+    String buyerName;
+    String buyerId;
+    Bid.BidStatus status;
+    Long totalBids;
 }

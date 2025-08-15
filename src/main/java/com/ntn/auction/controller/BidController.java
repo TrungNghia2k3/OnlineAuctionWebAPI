@@ -1,6 +1,6 @@
 package com.ntn.auction.controller;
 
-import com.ntn.auction.dto.request.CreateBidRequest;
+import com.ntn.auction.dto.request.BidCreateRequest;
 import com.ntn.auction.dto.response.ApiResponse;
 import com.ntn.auction.dto.response.BidResponse;
 import com.ntn.auction.service.BidOptimizedService;
@@ -25,8 +25,8 @@ public class BidController {
     BidOptimizedService bidOptimizedService;
 
     @PostMapping
-    public ApiResponse<BidResponse> placeBid(@RequestBody @Valid CreateBidRequest createBidRequest) {
-        BidResponse bid = bidOptimizedService.placeBidOptimized(createBidRequest);
+    public ApiResponse<BidResponse> placeBid(@RequestBody @Valid BidCreateRequest bidCreateRequest) {
+        BidResponse bid = bidOptimizedService.placeBidOptimized(bidCreateRequest);
         return ApiResponse.<BidResponse>builder().result(bid).build();
     }
 
